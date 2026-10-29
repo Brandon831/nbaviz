@@ -163,12 +163,14 @@ def build_season(raw, y, names, cup_id):
     made = s.scoring_play.astype(int).values; three = three_flag(s).astype(int)
     val = (((made * 2 + three) * 101 + cx) * 95 + cy).astype(np.uint16)
     po = (s.season_type.values == 3).astype(int)
-    # per-shot extras (same order as the shot array): date index, home flag, assisted flag, shot type
+    # per-shot extras (same order as the shot array). Bits 0-7 date index, 8 home, 9 assisted, 10-12 shot type, 13 driving
     home = (s.team_id.values == s.home_team_id.values).astype(np.int64)
     asst = (s.scoring_play.astype(bool).values & s.athlete_id_2.notna().values).astype(np.int64)
     sty = np.array([shot_type(t) for t in s.type_text.values], dtype=np.int64)
     di = np.array([didx[str(x)] for x in s.game_date.values], dtype=np.int64)
-    ex = (di | (home << 8) | (asst << 9) | (sty << 10)).astype(np.uint16)
+    # a "driving" label (driving layup, dunk, floater...) means the shot came off the dribble
+    drv = np.array([('driving' in (t or '').lower()) for t in s.type_text.values], dtype=np.int64)
+    ex = (di | (home << 8) | (asst << 9) | (sty << 10) | (drv << 13)).astype(np.uint16)
     zone = LUT[three, cx, cy]
     # opponent shooting by zone (the defending team is the one that did not take the shot)
     defender = np.where(home == 1, s.away_team_abbrev.values, s.home_team_abbrev.values)
