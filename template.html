@@ -487,6 +487,14 @@ canvas:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-ra
           <label><input type="radio" name="loc" value="away"><span>Away</span></label>
         </div>
       </fieldset>
+      <fieldset class="seg">
+        <legend>Shot creation</legend>
+        <div class="segbtns">
+          <label><input type="radio" name="create" value="all" checked><span>All</span></label>
+          <label><input type="radio" name="create" value="cs"><span>Catch-and-shoot style</span></label>
+          <label><input type="radio" name="create" value="dribble"><span>Off the dribble</span></label>
+        </div>
+      </fieldset>
       <div class="field">
         <label for="flast">Recent games</label>
         <select id="flast"><option value="0">All games</option><option value="5">Last 5</option><option value="10">Last 10</option><option value="20">Last 20</option></select>
@@ -555,7 +563,7 @@ canvas:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-ra
   <div class="foot">
     <p>Data: ESPN play-by-play via sportsdataverse, <span id="firstseason">2022-23</span> onward. Shot locations are ESPN's own, so zone totals will not match NBA.com exactly. Free throws, heaves beyond 40 feet from the hoop, and All-Star games are left out. Regular season includes play-in games. The NBA Cup final is left out of regular-season totals, as in the league&rsquo;s official stats, and shown as a badge instead. Games played counts games a player appears in the play-by-play.</p>
     <p>Zone color shrinks small samples toward the league average, so a zone with a handful of shots will not light up on luck alone. The numbers in each zone and in the table are raw. Points per shot counts a made three as 3 and a made two as 2, so a corner three that goes in 38% of the time and a mid-range shot that goes in 57% of the time are worth the same. Shot selection is the points per shot a league-average shooter would get from the same mix of zones; shot making is how far the player is above or below that on those shots.</p>
-    <p>Shot type, home or away and last-games filters use ESPN’s own play descriptions and dates. The league baseline follows the shot type and location filters but not the last-games filter. Assists are only recorded on made shots, so “assisted” is a share of made field goals, not a filter. Shot-profile twins compare the share of each player’s attempts that come from each of the 14 zones.</p>
+    <p>Shot type, shot creation, home or away and last-games filters use ESPN’s own play descriptions and dates. The league baseline follows the shot type, shot creation and location filters but not the last-games filter. Shot creation stands in for tracking data, which ESPN does not publish: catch-and-shoot style means a plain or running jump shot, and off the dribble means a pull-up, step-back, fadeaway or turnaround jumper or any shot ESPN calls a drive (driving layups, dunks, floaters and the like). It works best on threes: in 2025-26, 98% of made threes labeled as jump shots were assisted, against 44% of made pull-up and step-back threes. Mid-range is less clear, because ESPN labels about nine in ten mid-range jumpers as pull-ups or fadeaways. Assists are only recorded on made shots, so “Assisted” is a share of made field goals, not a filter. Shot-profile twins compare the share of each player’s attempts that come from each of the 14 zones.</p>
     <details>
       <summary>How the badges are decided</summary>
       <p><b>League awards (gold).</b> End-of-season awards from the league&rsquo;s official voting results: MVP, Defensive Player of the Year, Rookie of the Year, Sixth Man of the Year, Most Improved Player, Clutch Player of the Year and Finals MVP. Each season has its own set, and the season in progress has none yet.</p>
@@ -700,16 +708,17 @@ LABEL[0] = [0, 7.5]; LABEL[1] = [0, 11.4];
 
 /* ---------- state ---------- */
 var S = {pid:null, season:ALL_KEYS[0], type:'reg', metric:'diff', dots:false,
-  f:{loc:'all', shot:'all', last:0}, cmp:{mode:'none', pid:null}};
+  f:{loc:'all', shot:'all', create:'all', last:0}, cmp:{mode:'none', pid:null}};
 var plist = [], cache = {}, viewA = null, viewB = null;
 var SHOT_MASK = {all:0, rim:(1<<4)|(1<<5)|(1<<6), jump:1<<1, pull:1<<2, float:1<<3};
+var CREATE_LABEL = {cs:'catch-and-shoot style jump shots', dribble:'shots off the dribble'};
 var SHOT_LABEL = {all:'all shots', rim:'layups, dunks and tips', jump:'jump shots', pull:'pull-up, step-back and fadeaway jumpers', float:'floaters and hooks'};
 
 function keysFor(){ return S.season==='all' ? ALL_KEYS : [S.season]; }
 function fmtInt(n){ return Math.round(n).toLocaleString('en-US'); }
 function pct(x){ return x==null || isNaN(x) ? '\u2013' : (x*100).toFixed(1)+'%'; }
 function norm(s){ return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
-function filtersActive(f){ return f.loc!=='all' || f.shot!=='all' || f.last>0; }
+function filtersActive(f){ return f.loc!=='all' || f.shot!=='all' || (f.create && f.create!=='all') || f.last>0; }
 function prevSeasonKey(){
   if (S.season==='all') return null;
   var i = SEASON_KEYS.indexOf(S.season);
@@ -719,7 +728,7 @@ function prevSeasonKey(){
 /* ---------- tallying ---------- */
 function tally(keys, pid, type, f, shots){
   var fgm = new Float64Array(NZ), fga = new Float64Array(NZ), ast = new Float64Array(NZ), tot = [0,0,0,0], seen = {};
-  var L = LUT, tmask = SHOT_MASK[f.shot] || 0, needLoc = f.loc !== 'all', homeWant = f.loc === 'home' ? 1 : 0, allowed = null;
+  var L = LUT, tmask = SHOT_MASK[f.shot] || 0, needLoc = f.loc !== 'all', homeWant = f.loc === 'home' ? 1 : 0, allowed = null, crt = f.create || 'all', needCreate = crt !== 'all', wantCS = crt === 'cs';
   function slice(Sx, p){
     var a = p.off, b = p.off + p.nr + p.np;
     if (type==='reg') b = p.off + p.nr; else if (type==='po') a = p.off + p.nr;
@@ -744,6 +753,7 @@ function tally(keys, pid, type, f, shots){
         var e = ex ? ex[i] : 0;
         if (needLoc && ((e>>8)&1) !== homeWant) continue;
         if (tmask && !((tmask >> ((e>>10)&7)) & 1)) continue;
+        if (needCreate){ var ty = (e>>10)&7, dv = (e>>13)&1; if (wantCS ? !(ty === 1 && !dv) : !(ty === 2 || dv)) continue; }
         if (allowed && !allowed[sr + (e&255)]) continue;
         var v = arr[i], cy = v % 95, q = (v-cy)/95, cx = q % 101, m = (q-cx)/101;
         var three = m & 1, made = m >> 1, z = L[(three*101+cx)*95+cy];
@@ -758,8 +768,8 @@ function tally(keys, pid, type, f, shots){
   return {fgm:fgm, fga:fga, ast:ast, tot:tot, games:Object.keys(seen).length};
 }
 function leagueFor(keys, type, f){
-  var key = keys.join()+'|'+type+'|'+f.loc+'|'+f.shot;
-  return cache[key] || (cache[key] = tally(keys, null, type, {loc:f.loc, shot:f.shot, last:0}, null));
+  var key = keys.join()+'|'+type+'|'+f.loc+'|'+f.shot+'|'+(f.create || 'all');
+  return cache[key] || (cache[key] = tally(keys, null, type, {loc:f.loc, shot:f.shot, create:f.create || 'all', last:0}, null));
 }
 /* attempts by zone for every player: used to find players who shoot alike */
 function playerTable(keys, type){
@@ -1190,6 +1200,7 @@ function ppsSpan(d){
 function filterText(f){
   var bits = [];
   if (f.shot !== 'all') bits.push(SHOT_LABEL[f.shot]);
+  if (f.create && f.create !== 'all') bits.push(CREATE_LABEL[f.create]);
   if (f.loc !== 'all') bits.push(f.loc + ' games');
   if (f.last > 0) bits.push('last ' + f.last + ' games');
   return bits;
@@ -1216,7 +1227,8 @@ function renderHeader(){
     xl.innerHTML = '<a href="https://x.com/search?q='+encodeURIComponent(po.name+' NBA')+'&f=user" target="_blank" rel="noopener noreferrer">Find '+po.name.replace(/&/g,'&amp;').replace(/</g,'&lt;')+' on X</a><span class="src">search</span>';
   // filter note
   var note = '';
-  if (ft.length) note = 'Showing '+ft.join(', ')+'. The league comparison '+(f.last>0 ? 'uses the same shot type and location but the full season rather than the last games' : 'uses the same filters')+'.';
+  if (ft.length) note = 'Showing '+ft.join(', ')+'. The league comparison '+(f.last>0 ? 'uses the same shot type, shot creation and location but the full season rather than the last games' : 'uses the same filters')+'.';
+  if (f.create && f.create !== 'all') note += ' Shot creation is read from ESPN\u2019s shot descriptions, not tracking data: catch-and-shoot style means a plain or running jump shot, and off the dribble means a pull-up, step-back, fadeaway, turnaround or any drive. It works best on threes.';
   document.getElementById('fnote').textContent = note;
   document.getElementById('fnote').hidden = !note;
 }
@@ -1361,6 +1373,8 @@ function update(){
     else if (S.cmp.mode === 'league') viewB = leagueView(specA);
   }
   var cmpOn = !!viewB;
+  var emptyMsg = filtersActive(S.f) ? 'No shots match these filters. Try loosening one.' : 'No shots for this player in the selected games.';
+  document.getElementById('empty').textContent = emptyMsg; document.getElementById('empty2').textContent = emptyMsg;
   document.getElementById('stage').classList.toggle('cmp', cmpOn);
   document.getElementById('figB').hidden = !cmpOn;
   document.getElementById('capA').hidden = !cmpOn; document.getElementById('capB').hidden = !cmpOn;
@@ -1413,6 +1427,9 @@ Array.prototype.forEach.call(document.querySelectorAll('input[name=metric]'), fu
 Array.prototype.forEach.call(document.querySelectorAll('input[name=loc]'), function(el){
   el.addEventListener('change', function(){ if (el.checked){ S.f.loc = el.value; update(); } });
 });
+Array.prototype.forEach.call(document.querySelectorAll('input[name=create]'), function(el){
+  el.addEventListener('change', function(){ if (el.checked){ S.f.create = el.value; update(); } });
+});
 document.getElementById('fshot').addEventListener('change', function(e){ S.f.shot = e.target.value; update(); });
 document.getElementById('flast').addEventListener('change', function(e){ S.f.last = +e.target.value; update(); });
 function syncCmpUi(){
@@ -1425,9 +1442,10 @@ document.getElementById('cmpmode').addEventListener('change', function(e){
   syncCmpUi(); update();
 });
 document.getElementById('freset').addEventListener('click', function(){
-  S.f = {loc:'all', shot:'all', last:0}; S.cmp = {mode:'none', pid:null};
+  S.f = {loc:'all', shot:'all', create:'all', last:0}; S.cmp = {mode:'none', pid:null};
   document.getElementById('fshot').value = 'all'; document.getElementById('flast').value = '0';
   Array.prototype.forEach.call(document.querySelectorAll('input[name=loc]'), function(el){ el.checked = el.value === 'all'; });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name=create]'), function(el){ el.checked = el.value === 'all'; });
   syncCmpUi(); update();
 });
 document.getElementById('dots').addEventListener('change', function(e){ S.dots = e.target.checked; update(); });
@@ -1467,9 +1485,10 @@ function openPlayer(pid, opts){
   }
   S.season = want; S.pid = pid; S.cmp = {mode:'none', pid:null};
   if (!opts.keep){
-    S.type = 'reg'; S.f = {loc:'all', shot:'all', last:0};
+    S.type = 'reg'; S.f = {loc:'all', shot:'all', create:'all', last:0};
     document.getElementById('fshot').value = 'all'; document.getElementById('flast').value = '0';
     Array.prototype.forEach.call(document.querySelectorAll('input[name=loc]'), function(el){ el.checked = el.value === 'all'; });
+    Array.prototype.forEach.call(document.querySelectorAll('input[name=create]'), function(el){ el.checked = el.value === 'all'; });
     Array.prototype.forEach.call(document.querySelectorAll('input[name=type]'), function(el){ el.checked = el.value === 'reg'; });
   }
   document.getElementById('q').value = ''; seasonSel.value = want;
