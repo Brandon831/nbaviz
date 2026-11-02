@@ -26,6 +26,12 @@ for k, s in seasons.items():
     if k != leaders['key'] and n < 150000: problems.append(f'{k}: only {n} shots, which looks incomplete')
 for k in leaders['hist']:
     if leaders['hist'][k]['games'] != 1230: problems.append(f'{k}: {leaders["hist"][k]["games"]} games instead of 1230')
+tg = leaders.get('tgames', {})
+if sorted(tg) != sorted(seasons): problems.append('team game data is missing for some seasons')
+for k, t in tg.items():
+    n = len(base64.b64decode(t['d'])) // 2 // t['w']
+    want = leaders['games'] if k == leaders['key'] else 1230
+    if n != want: problems.append(f'{k}: {n} team-game rows instead of {want}')
 if not leaders.get('sched'): problems.append('no scores or schedule')
 if not leaders.get('race', {}).get('dates'): problems.append('no MVP race data')
 size = len(html.encode('utf-8')) / 1e6

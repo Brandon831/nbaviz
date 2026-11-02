@@ -179,6 +179,12 @@ def build_season(raw, y, names, cup_id):
         m = (defender == t)
         opp[t] = {'reg': [np.bincount(zone[m & (po == 0)], minlength=14).tolist(), np.bincount(zone[m & (po == 0) & (made == 1)], minlength=14).tolist()],
                   'po':  [np.bincount(zone[m & (po == 1)], minlength=14).tolist(), np.bincount(zone[m & (po == 1) & (made == 1)], minlength=14).tolist()]}
+    # shots per game and team by zone group (rim, paint, mid-range, above-the-break three, corner three), regular season only
+    GRP = np.array([0, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4])
+    m0 = (po == 0)
+    cnt = pd.DataFrame({'g': s.game_id.values[m0], 'h': home[m0], 'k': GRP[zone[m0]]}).groupby(['g', 'h', 'k']).size()
+    shotgrp = {}
+    for (g_, h_, k_), n_ in cnt.items(): shotgrp.setdefault((int(g_), int(h_)), [0] * 5)[int(k_)] = int(n_)
     s = s.assign(val=val, ex=ex, po=po, pid=s.athlete_id_1.astype(int))
     for pid, nm in s[['pid', 'athlete_name_1']].drop_duplicates('pid').itertuples(index=False): names[int(pid)] = nm
     team = s.groupby('pid').team_id.agg(lambda x: x.value_counts().index[0]).map(tm)
@@ -191,7 +197,7 @@ def build_season(raw, y, names, cup_id):
     arr = np.concatenate(chunks).astype('<u2'); xarr = np.concatenate(xchunks).astype('<u2')
     assert len(arr) == len(xarr)
     return {'stand': stand, 'lead': lead, 'cup': cup, 'games': games, 'asof': asof, 'label': f'{y-1}-{str(y)[2:]}', 'pl': pl,
-            'd': base64.b64encode(arr.tobytes()).decode(), 'x': base64.b64encode(xarr.tobytes()).decode(), 'dates': dates, 'opp': opp}
+            'd': base64.b64encode(arr.tobytes()).decode(), 'x': base64.b64encode(xarr.tobytes()).decode(), 'dates': dates, 'opp': opp, '_grp': shotgrp}
 
 # ----------------------------------------------------------------------------- box scores: player totals, team ratings, clutch time
 def box_games(raw, y, cup_id):
@@ -214,7 +220,7 @@ def box_players(raw, y, cup_id):
 
 def team_ratings(d):
     act = d[(d.did_not_play == False) & d.minutes.notna()]
-    t = act.groupby(['game_id', 'team_abbreviation']).agg(pts=('points', 'sum'), fga=('field_goals_attempted', 'sum'), fta=('free_throws_attempted', 'sum'),
+    t = act.groupby(['game_id', 'team_abbreviation']).agg(pts=('team_score', 'first'), fga=('field_goals_attempted', 'sum'), fta=('free_throws_attempted', 'sum'),
         oreb=('offensive_rebounds', 'sum'), tov=('turnovers', 'sum'), opp=('opponent_team_abbreviation', 'first'), opts=('opponent_team_score', 'first')).reset_index()
     t['poss'] = t.fga + 0.44 * t.fta - t.oreb + t.tov
     j = t.merge(t[['game_id', 'team_abbreviation', 'poss']].rename(columns={'team_abbreviation': 'opp', 'poss': 'oposs'}), on=['game_id', 'opp'])
@@ -245,6 +251,34 @@ def clutch_rows(raw, y, cup_id):
     ev = pd.concat([c[['game_id', 'athlete_id_1']].rename(columns={'athlete_id_1': 'p'}), c[c.athlete_id_2.notna() & sc & ~ft][['game_id', 'athlete_id_2']].rename(columns={'athlete_id_2': 'p'})]).dropna()
     ev['p'] = ev.p.astype(int); out['games'] = ev.drop_duplicates(['game_id', 'p']).groupby('p').size().reindex(out.index).fillna(0)
     return [[int(pid), int(r.pts), int(r.fgm), int(r.fga), int(r.ftm), int(r.fta), int(r.ast), int(r.tov), int(r.games)] for pid, r in out.astype(float).iterrows()]
+
+# ----------------------------------------------------------------------------- game-by-game team rows (Team stats tab)
+TEAMS30 = sorted(TEAM_DIV)
+TG_WIDTH = 42     # per game: date index, home team, away team, minutes, then each team's 19 numbers (box totals, then shots by zone group)
+TG_COLS = ['points', 'field_goals_made', 'field_goals_attempted', 'three_point_field_goals_made', 'three_point_field_goals_attempted', 'free_throws_made',
+           'free_throws_attempted', 'offensive_rebounds', 'defensive_rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'fouls']
+def team_games(raw, y, d, shotgrp):
+    act = d[(d.did_not_play == False) & d.minutes.notna()]
+    tot = act.groupby(['game_id', 'team_abbreviation'])[TG_COLS].sum()
+    gmin = act.groupby('game_id').minutes.sum() / 10
+    meta = d.drop_duplicates(['game_id', 'team_abbreviation'])[['game_id', 'team_abbreviation', 'game_date', 'home_away', 'team_score']]
+    per = pd.read_parquet(fetch(raw, 'pbp', y), columns=['game_id', 'period_number']).groupby('game_id').period_number.max()
+    dates = sorted({str(x) for x in meta.game_date}); didx = {x: i for i, x in enumerate(dates)}; tix = {t: i for i, t in enumerate(TEAMS30)}
+    rows = []
+    for gid, g in meta.groupby('game_id'):
+        h = g[g.home_away == 'home']; a = g[g.home_away == 'away']
+        if len(h) != 1 or len(a) != 1: continue
+        h = h.iloc[0]; a = a.iloc[0]
+        p = per.get(gid)
+        ot = max(0, int(p) - 4) if p is not None and p == p else max(0, int(round((gmin.get(gid, 240 / 5) - 48) / 5)))
+        def block(r, side):
+            v = [int(r.team_score)] + [int(tot.loc[(gid, r.team_abbreviation)][c]) for c in TG_COLS[1:]]
+            return v + shotgrp.get((int(gid), side), [0] * 5)
+        rows.append((didx[str(h.game_date)], int(gid), [didx[str(h.game_date)], tix[h.team_abbreviation], tix[a.team_abbreviation], 48 + 5 * ot] + block(h, 1) + block(a, 0)))
+    rows.sort(key=lambda r: (r[0], r[1]))
+    arr = np.array([r[2] for r in rows], dtype=np.int64)
+    assert arr.shape[1] == TG_WIDTH and arr.max() < 65536 and arr.min() >= 0
+    return {'teams': TEAMS30, 'dates': dates, 'w': TG_WIDTH, 'd': base64.b64encode(arr.astype('<u2').tobytes()).decode()}
 
 # ----------------------------------------------------------------------------- MVP race: the MVP ladder re-run after every game date this season
 GS_FIELDS = ['points','field_goals_made','field_goals_attempted','free_throws_made','free_throws_attempted','offensive_rebounds','defensive_rebounds','steals','assists','blocks','fouls','turnovers']
@@ -335,11 +369,12 @@ def norm_name(s):
 def build_blocks(raw, refresh_current=True):
     cups = {y: cup_game_id(raw, y) for y in SEASONS}
     print('cup championship games:', cups, file=sys.stderr)
-    names = {}; seasons = {}; hist = {}; teams = {}; clutch = {}; cur = None; cur_d = None
+    names = {}; seasons = {}; hist = {}; teams = {}; clutch = {}; tgames = {}; cur = None; cur_d = None
     for y in SEASONS:
         k = str(y)
         seasons[k] = build_season(raw, y, names, cups[y])
         L, d = box_players(raw, y, cups[y])
+        tgames[k] = team_games(raw, y, d, seasons[k].pop('_grp'))
         teams[k] = team_ratings(d); clutch[k] = clutch_rows(raw, y, cups[y])
         if y == CURRENT: cur, cur_d = L, d
         else: hist[k] = L
@@ -355,7 +390,7 @@ def build_blocks(raw, refresh_current=True):
     hp = {k: hist[k]['players'] for k in hist}; hs = {k: seasons[k]['stand'] for k in hist}
     leaders = {'key': str(CURRENT), 'asof': cur['asof'], 'games': cur['games'], 'maxg': cur['maxg'], 'tg': cur['tg'], 'players': cur['players'],
                'hist': hist, 'mem': {'record': record, 'coach': roster['coach'], 'roster': roster['roster'], 'rosterAsOf': roster['rosterAsOf']},
-               'teams': teams, 'clutch': clutch, 'race': mvp_race(cur_d, hp, hs), 'sched': games_table(raw, CURRENT)}
+               'teams': teams, 'tgames': tgames, 'clutch': clutch, 'race': mvp_race(cur_d, hp, hs), 'sched': games_table(raw, CURRENT)}
     shot = {'names': {str(k): v for k, v in names.items()}, 'seasons': seasons}
     return shot, leaders
 
