@@ -1,15 +1,19 @@
 # NBA dashboard
 
 One script rebuilds the whole dashboard from public data and writes it as a single self-contained web page.
-The page has four tabs:
+The page has five tabs:
 
-- **Shot charts.** Every shot since 2022-23 by zone, with filters (shot type, home or away, last games), a
+- **Shot charts.** Every shot since 2022-23 by zone, with filters (shot type, catch-and-shoot style or off the dribble, home or away, last games), a
   points-per-shot color mode, shot selection versus shot making, side-by-side comparison, and
   shot-profile twins.
 - **League leaders.** Fourteen top-10 leaderboards and the Grizzlies roster.
 - **Awards watch.** Top-5 candidates for MVP, Defensive Player, Rookie of the Year, Sixth Man, Most
   Improved and Clutch Player, plus projected All-NBA, All-Defensive and All-Rookie teams.
-- **Scores & teams.** A day-by-day scores browser, standings, team ratings, and team defense shot charts.
+- **Scores & teams.** A day-by-day scores browser, standings, and team defense shot charts.
+- **Team stats.** All 30 teams plotted on any two of 42 team statistics (offensive against defensive rating,
+  last-10 net rating against season net rating, and so on) over the whole season, the latest games, or home
+  and road games, with preset charts, a Random button and a sortable table. The highlighted team is drawn
+  in its own colors, which come from ESPN's data.
 
 Data comes from ESPN play-by-play and box scores, republished by
 [sportsdataverse](https://github.com/sportsdataverse/sportsdataverse-data/releases). Nothing needs an account or API key.
@@ -69,7 +73,7 @@ yet, it is not in the source yet. Running the workflow again later in the day pi
 
 ## What updates itself, and what you maintain by hand
 
-Everything about the current season updates itself: shots, box scores, standings, team ratings, clutch
+Everything about the current season updates itself: shots, box scores, standings, team statistics, clutch
 statistics, the MVP race, scores and schedule, every leaderboard and every award ladder. The NBA Cup final
 is found automatically from the schedule.
 
@@ -101,7 +105,7 @@ and refresh `static/roster.json`.
 - About 0.01% of shots have a shooter ID but no player name in the source, and are skipped.
 - The award models are statistical, built from box scores, standings and play-by-play. They are not votes. Each
   panel on the page says how it works and how it did on past seasons.
-- The page is about 6 MB, mostly shot data, and works on phones. The only thing it fetches from the internet is the Barlow typeface from Google Fonts; if that is blocked or you are offline, it falls back to system fonts.
+- The page is about 6.3 MB, mostly shot data, and works on phones. The only thing it fetches from the internet is the Barlow typeface from Google Fonts; if that is blocked or you are offline, it falls back to system fonts.
 
 ## Files
 

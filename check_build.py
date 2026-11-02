@@ -34,6 +34,7 @@ for k, t in tg.items():
     if n != want: problems.append(f'{k}: {n} team-game rows instead of {want}')
 if not leaders.get('sched'): problems.append('no scores or schedule')
 if not leaders.get('race', {}).get('dates'): problems.append('no MVP race data')
+if len(leaders.get('tcolors', {})) < 30: print('note: team colors are missing for some teams, so the highlighted team will use the default color there')
 size = len(html.encode('utf-8')) / 1e6
 if size > 15: problems.append(f'page is {size:.1f} MB; the hosting limit is 16 MB')
 print(f'{path}: {size:.2f} MB | seasons {sorted(seasons)} | current season {leaders["key"]}: {leaders["games"]} games through {leaders["asof"]} | {len(leaders["sched"])} schedule rows')

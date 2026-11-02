@@ -7,7 +7,7 @@ Builds the NBA dashboard (one self-contained HTML file) from public ESPN data pu
 Raw files are downloaded into --raw the first time and re-downloaded for the current season on every run.
 Static inputs live in ./static (awards.json, defmodel.json, roster.json); the page layout lives in template.html.
 """
-import argparse, base64, datetime as dt, json, math, os, sys, urllib.request
+import argparse, base64, datetime as dt, json, math, os, re, sys, urllib.request
 from fractions import Fraction
 import numpy as np, pandas as pd, pyarrow.parquet as pq
 
@@ -366,6 +366,15 @@ def norm_name(s):
     s = re.sub(r"[^a-z ]", "", s.replace('-', ' '))
     return ' '.join(t for t in s.split() if t not in ('jr', 'sr', 'ii', 'iii', 'iv'))
 
+def team_colors(d):
+    """ESPN's primary and secondary color for each team, as six-digit hex codes (cosmetic: the page falls back to a default without them)."""
+    if not {'team_color', 'team_alternate_color'} <= set(d.columns): return {}
+    out = {}
+    for r in d.drop_duplicates('team_abbreviation').itertuples():
+        pc = str(r.team_color or '').lower().lstrip('#'); sc = str(r.team_alternate_color or '').lower().lstrip('#')
+        if re.fullmatch(r'[0-9a-f]{6}', pc): out[r.team_abbreviation] = [pc, sc if re.fullmatch(r'[0-9a-f]{6}', sc) else '']
+    return out
+
 def build_blocks(raw, refresh_current=True):
     cups = {y: cup_game_id(raw, y) for y in SEASONS}
     print('cup championship games:', cups, file=sys.stderr)
@@ -390,7 +399,7 @@ def build_blocks(raw, refresh_current=True):
     hp = {k: hist[k]['players'] for k in hist}; hs = {k: seasons[k]['stand'] for k in hist}
     leaders = {'key': str(CURRENT), 'asof': cur['asof'], 'games': cur['games'], 'maxg': cur['maxg'], 'tg': cur['tg'], 'players': cur['players'],
                'hist': hist, 'mem': {'record': record, 'coach': roster['coach'], 'roster': roster['roster'], 'rosterAsOf': roster['rosterAsOf']},
-               'teams': teams, 'tgames': tgames, 'clutch': clutch, 'race': mvp_race(cur_d, hp, hs), 'sched': games_table(raw, CURRENT)}
+               'teams': teams, 'tgames': tgames, 'tcolors': team_colors(cur_d), 'clutch': clutch, 'race': mvp_race(cur_d, hp, hs), 'sched': games_table(raw, CURRENT)}
     shot = {'names': {str(k): v for k, v in names.items()}, 'seasons': seasons}
     return shot, leaders
 

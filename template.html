@@ -435,11 +435,14 @@ canvas:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-ra
 .tswrap{position:relative;margin-top:6px}
 #ts-svg{display:block;width:100%;height:auto}
 .td{cursor:pointer;outline:none}
-.td circle{fill:var(--chip);stroke:var(--cline);stroke-width:1.3}
+.td .tdc{fill:var(--chip);stroke:var(--cline);stroke-width:1.3}
 .td text{fill:var(--ink);pointer-events:none}
-.td.sel circle{fill:var(--freq);stroke:var(--ink);stroke-width:2}
-.td:hover circle{stroke:var(--ink);stroke-width:2.4}
-.td:focus-visible circle{stroke:var(--focus);stroke-width:3.4}
+.td.sel .tdc{fill:var(--freq);stroke:var(--ink);stroke-width:2}
+.td:hover .tdc{stroke:var(--ink);stroke-width:2.4}
+.tdring{fill:none;stroke:none;pointer-events:none}
+.td.sel .tdring{stroke:var(--ink);stroke-width:1.4}
+.td:focus-visible .tdring{stroke:var(--focus);stroke-width:3.4}
+.td:focus-visible .tdc{stroke:var(--focus);stroke-width:3.4}
 .tip strong{font-weight:700}
 .tsfocus{margin:8px 0 0;font-size:15px}
 .tsfocus .linkbtn{height:auto;padding:0}
@@ -2695,6 +2698,18 @@ function niceTicks(lo, hi, n){
   return {ticks:out, step:step};
 }
 
+/* ---------- team colors for the highlighted team ---------- */
+function hexRgb(h){ return [parseInt(h.substr(0,2),16), parseInt(h.substr(2,2),16), parseInt(h.substr(4,2),16)]; }
+function lumOf(rgb){ var c = rgb.map(function(v){ v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126*c[0] + 0.7152*c[1] + 0.0722*c[2]; }
+function contrastOf(a, b){ var x = lumOf(a), y = lumOf(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+/* the team's primary color fills the dot, its secondary color rings it; if the two are too alike a black or white ring is used, and the letters are black or white, whichever reads better */
+function teamLook(team){
+  var c = L.tcolors && L.tcolors[team];
+  if (!c || !/^[0-9a-f]{6}$/i.test(c[0])) return null;
+  var P = hexRgb(c[0]), S = c[1] && /^[0-9a-f]{6}$/i.test(c[1]) ? hexRgb(c[1]) : null, white = [255,255,255], dark = [0,0,0];
+  return {fill:'#'+c[0], stroke: S && contrastOf(P, S) >= 1.8 ? '#'+c[1] : (lumOf(P) > 0.4 ? '#111111' : '#ffffff'), text: contrastOf(P, white) >= contrastOf(P, dark) ? '#ffffff' : '#000000'};
+}
+
 /* ---------- the chart ---------- */
 var VIEWBOX = {W:760, H:560, ml:62, mr:24, mt:22, mb:58};
 var plotted = [];
@@ -2740,9 +2755,11 @@ function drawChart(){
   var order = plotted.slice().sort(function(a,b){ return (a.t === S.focus) - (b.t === S.focus) || a.y - b.y; });
   var tabbed = plotted.slice().sort(function(a,b){ return a.x - b.x; })[0].t;
   order.forEach(function(p){
-    var f = p.t === S.focus, r = f ? rad + 3 : rad;
+    var f = p.t === S.focus, r = f ? rad + 3 : rad, look = f ? teamLook(p.t) : null;
     out += '<g class="td'+(f ? ' sel' : '')+'" data-team="'+p.t+'" tabindex="'+(p.t === tabbed ? 0 : -1)+'" role="button" aria-label="'+esc(NAMES[p.t])+': '+esc(sx.l)+' '+fmt(sx, DATA[p.t][S.x])+', '+esc(sy.l)+' '+fmt(sy, DATA[p.t][S.y])+'">'+
-      '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+r+'"/><text x="'+p.x.toFixed(1)+'" y="'+(p.y+3.6).toFixed(1)+'" text-anchor="middle" font-size="'+(narrow ? (f ? 9.5 : 8.5) : (f ? 10.5 : 9.5))+'" font-weight="700">'+p.t+'</text></g>';
+      '<circle class="tdring" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+(r + 4)+'"/>'+
+      '<circle class="tdc" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+r+'"'+(look ? ' style="fill:'+look.fill+';stroke:'+look.stroke+';stroke-width:3"' : '')+'/>'+
+      '<text x="'+p.x.toFixed(1)+'" y="'+(p.y+3.6).toFixed(1)+'" text-anchor="middle"'+(look ? ' style="fill:'+look.text+'"' : '')+' font-size="'+(narrow ? (f ? 9.5 : 8.5) : (f ? 10.5 : 9.5))+'" font-weight="700">'+p.t+'</text></g>';
   });
   svg.innerHTML = out;
   var notes = [];
