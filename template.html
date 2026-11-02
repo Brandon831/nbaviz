@@ -358,7 +358,7 @@ canvas:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-ra
 .tabs{overflow-x:auto;scrollbar-width:thin}
 .tabs button{white-space:nowrap}
 .tabs .ts{display:none}
-@media (max-width:520px){.tabs .tl{display:none}.tabs .ts{display:inline}.tabs button{padding:10px 11px}}
+@media (max-width:520px){.tabs .tl{display:none}.tabs .ts{display:inline}.tabs button{padding:10px 8px;font-size:15px}}
 
 /* ----- scores & teams tab ----- */
 .scoresec,.standsec,.ratesec,.defsec{padding:14px 14px 12px;margin-bottom:16px}
@@ -406,6 +406,60 @@ canvas:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-ra
 #view-teams .card,#view-teams .tmgrid>*,.tdgrid>*{min-width:0}
 #view-teams .scroll{max-width:100%}
 @media (max-width:1000px){.gamelist{grid-template-columns:minmax(0,1fr)}.tmgrid{grid-template-columns:minmax(0,1fr)}.tdgrid{grid-template-columns:minmax(0,1fr)}.tmgrid .standsec{margin-bottom:16px}}
+
+/* ----- standings across the page; team stats tab ----- */
+.stgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 22px}
+.stcol{min-width:0}
+@media (max-width:1000px){.stgrid{grid-template-columns:minmax(0,1fr)}}
+.tsctl{padding:14px;margin-bottom:14px}
+.tsrow{display:flex;flex-wrap:wrap;gap:12px 14px;align-items:flex-end}
+.tsrow .field{min-width:150px;flex:1 1 180px}
+.tsaxes{margin-top:12px}
+.tsctl .checks{margin-top:12px}
+.tsaxes .field{flex:1 1 280px}
+.tsrow .field select{width:100%}
+.swapbtn{height:42px;width:44px;flex:0 0 44px;border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:8px;font-size:20px;line-height:1;cursor:pointer}
+.randbtn{height:42px;padding:0 15px;flex:0 0 auto;border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:8px;font:600 14.5px var(--body);cursor:pointer;white-space:nowrap}
+.randbtn:hover{background:var(--chip)}
+.randbtn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.randnote{margin:10px 0 0}
+.randnote:empty{display:none}
+.swapbtn:hover{background:var(--chip)}
+.swapbtn:focus-visible,.chip:focus-visible,.sortbtn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.chip{font:500 13.5px var(--body);border:1px solid var(--rule);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;cursor:pointer}
+.chip:hover{background:var(--chip)}
+.chip[aria-pressed=true]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.tschart,.tstable,.tsdefs{padding:14px 14px 12px;margin-bottom:16px}
+.tschart h2,.tstable h2{font:700 clamp(24px,2.8vw,32px)/1.05 var(--head);margin:0 0 4px}
+.tswrap{position:relative;margin-top:6px}
+#ts-svg{display:block;width:100%;height:auto}
+.td{cursor:pointer;outline:none}
+.td circle{fill:var(--chip);stroke:var(--cline);stroke-width:1.3}
+.td text{fill:var(--ink);pointer-events:none}
+.td.sel circle{fill:var(--freq);stroke:var(--ink);stroke-width:2}
+.td:hover circle{stroke:var(--ink);stroke-width:2.4}
+.td:focus-visible circle{stroke:var(--focus);stroke-width:3.4}
+.tip strong{font-weight:700}
+.tsfocus{margin:8px 0 0;font-size:15px}
+.tsfocus .linkbtn{height:auto;padding:0}
+#ts-table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+#ts-table th,#ts-table td{padding:6px 8px;text-align:right;white-space:nowrap}
+#ts-table th:first-child,#ts-table td.l{text-align:left}
+#ts-table tbody tr{border-top:1px solid var(--rule)}
+#ts-table tbody tr.mem{background:color-mix(in srgb,var(--freq) 12%,transparent)}
+#ts-table tbody tr.sel{background:color-mix(in srgb,var(--freq) 28%,transparent)}
+#ts-table td.hl{font-weight:700}
+.sortbtn{font:600 13px var(--body);color:var(--muted);background:none;border:0;padding:2px 0;cursor:pointer;white-space:nowrap}
+.sortbtn:hover{color:var(--ink)}
+th[aria-sort] .sortbtn{color:var(--ink)}
+.tsdefs summary{cursor:pointer;font-weight:600}
+.tsdefs h3{font:600 19px var(--head);margin:14px 0 4px}
+.tsdefs dl{margin:0}
+.tsdefs dt{font-weight:600;margin-top:6px}
+.tsdefs dd{margin:0 0 2px;color:var(--muted);font-size:14px}
+.lowtag{font:500 11px var(--body);color:var(--muted);border:1px solid var(--rule);border-radius:4px;padding:0 5px;margin-left:4px}
+@media (max-width:640px){.tsrow .field{flex-basis:100%}.swapbtn,.randbtn{flex:1 1 100%;width:auto}}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 @media (max-width:900px){
@@ -431,7 +485,8 @@ canvas:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-ra
     <button type="button" role="tab" id="tab-shots" aria-controls="view-shots" aria-selected="true" data-view="shots" aria-label="Shot charts"><span class="tl">Shot charts</span><span class="ts">Shots</span></button>
     <button type="button" role="tab" id="tab-leaders" aria-controls="view-leaders" aria-selected="false" data-view="leaders" aria-label="League leaders"><span class="tl">League leaders</span><span class="ts">Leaders</span></button>
     <button type="button" role="tab" id="tab-awards" aria-controls="view-awards" aria-selected="false" data-view="awards" aria-label="Awards watch"><span class="tl">Awards watch</span><span class="ts">Awards</span></button>
-    <button type="button" role="tab" id="tab-teams" aria-controls="view-teams" aria-selected="false" data-view="teams" aria-label="Scores and teams"><span class="tl">Scores &amp; teams</span><span class="ts">Teams</span></button>
+    <button type="button" role="tab" id="tab-teams" aria-controls="view-teams" aria-selected="false" data-view="teams" aria-label="Scores and teams"><span class="tl">Scores &amp; teams</span><span class="ts">Scores</span></button>
+    <button type="button" role="tab" id="tab-stats" aria-controls="view-stats" aria-selected="false" data-view="stats" aria-label="Team stats"><span class="tl">Team stats</span><span class="ts">Teams</span></button>
   </div>
   <div id="view-shots" role="tabpanel" aria-labelledby="tab-shots">
   <h1>NBA shot chart explorer</h1>
@@ -620,6 +675,7 @@ canvas:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-ra
     <div id="awpanels"></div>
   </div>
   <div id="view-teams" role="tabpanel" aria-labelledby="tab-teams" hidden></div>
+  <div id="view-stats" role="tabpanel" aria-labelledby="tab-stats" hidden></div>
 </main>
 
 <!-- Verified X handles, keyed by ESPN player id: {"3934672":"handle"}. Players not listed get a search link instead. -->
@@ -2226,12 +2282,14 @@ function renderRoster(){
 }
 
 /* ---------- views and tabs ---------- */
-var VIEWS = ['shots','leaders','awards','teams'];
+var VIEWS = ['shots','leaders','awards','teams','stats'];
 function show(view, scrollTo){
   VIEWS.forEach(function(v){ document.getElementById('view-'+v).hidden = (v !== view); });
   Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function(b){
     b.setAttribute('aria-selected', b.dataset.view === view ? 'true' : 'false');
   });
+  var bar = document.querySelector('.tabs'), on = document.getElementById('tab-'+view);
+  if (bar && on && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, on.offsetLeft - (bar.clientWidth - on.offsetWidth) / 2);
   if (view !== 'shots' && scrollTo){ var el = document.getElementById(scrollTo); if (el) el.scrollIntoView({behavior:'smooth', block:'start'}); }
   else window.scrollTo(0,0);
 }
@@ -2249,7 +2307,7 @@ Array.prototype.forEach.call(document.querySelectorAll('input[name=lmode]'), fun
   el.addEventListener('change', function(){ if (el.checked){ mode = el.value; render(); } });
 });
 var AW_IDS = ['mvp','dpoy','roy','smoy','clutch','mip','allnba','alldef','allrookie'];
-var TM_IDS = ['scores','standings','ratings','teamdef'];
+var TM_IDS = ['scores','standings','teamdef'];
 function fromHash(){
   var h = (location.hash||'').replace('#','');
   if (h === 'leaders') show('leaders');
@@ -2257,6 +2315,7 @@ function fromHash(){
   else if (h === 'awards') show('awards');
   else if (AW_IDS.indexOf(h) >= 0) show('awards', h);
   else if (h === 'teams') show('teams');
+  else if (h === 'teamstats' || h === 'ratings') show('stats');
   else if (TM_IDS.indexOf(h) >= 0) show('teams', h);
   else if (h === 'shot-charts' || h === 'shots') show('shots');
 }
@@ -2274,6 +2333,7 @@ var NAMES = {ATL:'Atlanta',BKN:'Brooklyn',BOS:'Boston',CHA:'Charlotte',CHI:'Chic
   IND:'Indiana',LAC:'LA Clippers',LAL:'LA Lakers',MEM:'Memphis',MIA:'Miami',MIL:'Milwaukee',MIN:'Minnesota',NO:'New Orleans',NY:'New York',OKC:'Oklahoma City',ORL:'Orlando',
   PHI:'Philadelphia',PHX:'Phoenix',POR:'Portland',SA:'San Antonio',SAC:'Sacramento',TOR:'Toronto',UTAH:'Utah',WSH:'Washington'};
 var TEAMS = Object.keys(NAMES);
+window.NBA_TEAMNAMES = NAMES;
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmtDay(iso, long){ return new Date(iso+'T12:00:00').toLocaleDateString('en-US', long ? {weekday:'long', month:'long', day:'numeric', year:'numeric'} : {month:'short', day:'numeric'}); }
 function todayET(){
@@ -2297,10 +2357,7 @@ function build(){
         '<button type="button" class="dnb" id="sc-next" aria-label="Next day with games">\u203A</button>'+
         '<button type="button" class="linkbtn" id="sc-latest">Latest results</button></div></div>'+
       '<p class="smn" id="sc-sub"></p><ul class="gamelist" id="sc-list"></ul></section>'+
-    '<div class="tmgrid">'+
-      '<section class="card standsec" id="standings" aria-labelledby="stand-h"><h2 id="stand-h">Standings</h2><p class="smn" id="stand-sub"></p><div id="stand-body"></div></section>'+
-      '<section class="card ratesec" id="ratings" aria-labelledby="rate-h"><h2 id="rate-h">Team ratings</h2><p class="smn">Points scored and allowed per 100 possessions. The best teams sit toward the top right. Click a team to see where its opponents shoot.</p><div id="rate-body"></div></section>'+
-    '</div>'+
+    '<section class="card standsec" id="standings" aria-labelledby="stand-h"><h2 id="stand-h">Standings</h2><p class="smn" id="stand-sub"></p><div class="stgrid" id="stand-body"></div></section>'+
     '<section class="card defsec" id="teamdef" aria-labelledby="def-h"><h2 id="def-h">Team defense shot chart</h2>'+
       '<p class="smn">Where opponents take their shots against a team, and how well they make them. Warm zones are where opponents shoot better than the league average, which means weaker defense there.</p>'+
       '<div class="tdctl">'+
@@ -2373,42 +2430,15 @@ function renderStandings(){
       var s = st[t], g = s.w + s.l, rt = ratingFor(t);
       return {t:t, w:s.w, l:s.l, pct:g ? s.w/g : -1, net:rt ? rt.net : -99, o:rt ? rt.o : null, d:rt ? rt.d : null, div:s.div, lead:s.d1, cl:s.c1};
     }).sort(function(a,b){ return (b.pct - a.pct) || (b.w - a.w) || (b.net - a.net); });
-    body += '<h3>'+conf+'ern Conference</h3><div class="scroll"><table class="stbl"><thead><tr><th scope="col">#</th><th scope="col" class="l">Team</th><th scope="col">W-L</th><th scope="col">PCT</th><th scope="col">Off</th><th scope="col">Def</th><th scope="col">Net</th></tr></thead><tbody>';
+    body += '<div class="stcol"><h3>'+conf+'ern Conference</h3><div class="scroll"><table class="stbl"><thead><tr><th scope="col">#</th><th scope="col" class="l">Team</th><th scope="col">W-L</th><th scope="col">PCT</th><th scope="col">Off</th><th scope="col">Def</th><th scope="col">Net</th></tr></thead><tbody>';
     rows.forEach(function(r, i){
       body += '<tr data-team="'+r.t+'"'+(r.t === 'MEM' ? ' class="mem"' : '')+'><td>'+(i+1)+'</td><td class="l"><span class="tmn" role="link" tabindex="0" data-team="'+r.t+'">'+NAMES[r.t]+'</span>'+(r.lead ? ' <span class="dlead" title="Leads the '+r.div+' Division">'+(r.cl ? '\u2605' : '\u25CF')+'</span>' : '')+'</td><td>'+r.w+'-'+r.l+'</td><td>'+(r.pct >= 0 ? r.pct.toFixed(3).replace(/^0/, '') : '\u2013')+'</td><td>'+(r.o != null ? r.o.toFixed(1) : '\u2013')+'</td><td>'+(r.d != null ? r.d.toFixed(1) : '\u2013')+'</td><td>'+(r.o != null ? (r.net >= 0 ? '+' : '\u2212')+Math.abs(r.net).toFixed(1) : '\u2013')+'</td></tr>';
     });
-    body += '</tbody></table></div>';
+    body += '</tbody></table></div></div>';
   });
   el('stand-body').innerHTML = body;
   el('stand-sub').textContent = 'Through '+fmtDay(L.asof, false)+', ranked by winning percentage with no tiebreakers. Off and Def are points per 100 possessions. \u25CF leads its division, \u2605 leads its conference.';
 }
-function renderScatter(){
-  var pts = TEAMS.map(function(t){ var r = ratingFor(t); return r ? {t:t, o:r.o, d:r.d} : null; }).filter(Boolean);
-  if (!pts.length){ el('rate-body').innerHTML = ''; return; }
-  var W = 560, H = 440, ml = 50, mr = 16, mt = 14, mb = 44;
-  var xs = pts.map(function(p){ return p.o; }), ys = pts.map(function(p){ return p.d; });
-  var x0 = Math.min.apply(null, xs) - 1.5, x1 = Math.max.apply(null, xs) + 1.5, y0 = Math.min.apply(null, ys) - 1.5, y1 = Math.max.apply(null, ys) + 1.5;
-  var avgO = xs.reduce(function(a,b){ return a+b; }, 0) / xs.length, avgD = ys.reduce(function(a,b){ return a+b; }, 0) / ys.length;
-  function X(v){ return ml + (W - ml - mr) * (v - x0) / (x1 - x0); }
-  function Y(v){ return mt + (H - mt - mb) * (v - y0) / (y1 - y0); }          // lower points allowed is better, so it sits higher
-  var svg = '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Offensive and defensive rating for each team">';
-  for (var i=0;i<=4;i++){
-    var vx = x0 + (x1 - x0) * i / 4, vy = y0 + (y1 - y0) * i / 4;
-    svg += '<line x1="'+X(vx).toFixed(1)+'" x2="'+X(vx).toFixed(1)+'" y1="'+mt+'" y2="'+(H-mb)+'" style="stroke:var(--rule)"/><text x="'+X(vx).toFixed(1)+'" y="'+(H-mb+16)+'" text-anchor="middle" font-size="11" style="fill:var(--muted)">'+vx.toFixed(0)+'</text>';
-    svg += '<line x1="'+ml+'" x2="'+(W-mr)+'" y1="'+Y(vy).toFixed(1)+'" y2="'+Y(vy).toFixed(1)+'" style="stroke:var(--rule)"/><text x="'+(ml-6)+'" y="'+(Y(vy)+4).toFixed(1)+'" text-anchor="end" font-size="11" style="fill:var(--muted)">'+vy.toFixed(0)+'</text>';
-  }
-  svg += '<line x1="'+X(avgO).toFixed(1)+'" x2="'+X(avgO).toFixed(1)+'" y1="'+mt+'" y2="'+(H-mb)+'" style="stroke:var(--cline)" stroke-dasharray="4 4"/><line x1="'+ml+'" x2="'+(W-mr)+'" y1="'+Y(avgD).toFixed(1)+'" y2="'+Y(avgD).toFixed(1)+'" style="stroke:var(--cline)" stroke-dasharray="4 4"/>';
-  svg += '<text x="'+((ml+W-mr)/2)+'" y="'+(H-6)+'" text-anchor="middle" font-size="12" style="fill:var(--muted)">Points scored per 100 possessions (offense, better to the right)</text>';
-  svg += '<text transform="translate(13 '+((mt+H-mb)/2)+') rotate(-90)" text-anchor="middle" font-size="12" style="fill:var(--muted)">Points allowed per 100 (defense, better is higher)</text>';
-  pts.forEach(function(p){
-    var cx = X(p.o), cy = Y(p.d), mem = p.t === 'MEM';
-    svg += '<g class="rp" data-team="'+p.t+'" tabindex="0" role="button" aria-label="'+NAMES[p.t]+': offense '+p.o.toFixed(1)+', defense '+p.d.toFixed(1)+'"><title>'+NAMES[p.t]+': scores '+p.o.toFixed(1)+', allows '+p.d.toFixed(1)+' ('+((p.o-p.d) >= 0 ? '+' : '\u2212')+Math.abs(p.o-p.d).toFixed(1)+')</title>'+
-      '<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="13" style="fill:'+(mem ? 'var(--freq)' : 'var(--chip)')+';stroke:var(--cline)"/>'+
-      '<text x="'+cx.toFixed(1)+'" y="'+(cy+3.5).toFixed(1)+'" text-anchor="middle" font-size="9.5" font-weight="700" style="fill:var(--ink)">'+p.t+'</text></g>';
-  });
-  el('rate-body').innerHTML = svg + '</svg>';
-}
-
 /* ---------- team defense shot chart ---------- */
 var tc = null, tdState = {team:'MEM', season:APP.SEASON_KEYS[0], type:'reg', metric:'diff'};
 function oppFor(team, keys, type){
@@ -2472,10 +2502,11 @@ function initTeamDef(){
 }
 
 function init(){
-  el('tmlede').textContent = 'Scores from every game day, the standings, how the teams rate on offense and defense, and where opponents shoot against each team. Data through '+fmtDay(L.asof, true)+' ('+L.games+' games).';
+  el('tmlede').textContent = 'Scores from every game day, the standings, and where opponents shoot against each team. To plot any two team statistics against each other, such as offensive and defensive rating, see the Team stats tab. Data through '+fmtDay(L.asof, true)+' ('+L.games+' games).';
   var txt = L.maxg < 20 ? 'Early season: no team has played more than '+L.maxg+' games, so ratings and shot charts here are small samples and will keep reshuffling. This notice goes away after 20 team games.' : '';
   var b = el('sb-t'); b.textContent = txt; b.hidden = !txt;
-  initScores(); renderStandings(); renderScatter(); initTeamDef();
+  initScores(); renderStandings(); initTeamDef();
+  window.NBA_TEAMS = {openDefense: function(t){ if (window.NBA_NAV) window.NBA_NAV.show('teams'); pickTeam(t); }};
   document.getElementById('view-teams').addEventListener('click', function(e){
     var t = e.target.closest ? e.target.closest('[data-team]') : null;
     if (t && t.getAttribute('data-team') && !t.matches('tr')) pickTeam(t.getAttribute('data-team'));
@@ -2487,6 +2518,358 @@ function init(){
   });
 }
 build();
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+</script>
+<script>
+(function(){
+'use strict';
+var L = JSON.parse(document.getElementById('leaders-data').textContent);
+var APP = window.NBA_APP, TGD = L.tgames || {}, CUR = L.key || '2027';
+var NAMES = window.NBA_TEAMNAMES || {};
+function el(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDay(iso){ return new Date(iso+'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); }
+
+/* ---------- game rows ---------- */
+var CACHE = {};
+function seasonGames(k){
+  if (CACHE[k]) return CACHE[k];
+  var s = TGD[k]; if (!s) return null;
+  var bin = atob(s.d), n = bin.length, bytes = new Uint8Array(n), i;
+  for (i=0;i<n;i++) bytes[i] = bin.charCodeAt(i);
+  var a = new Uint16Array(bytes.buffer), w = s.w, G = a.length / w, by = {};
+  s.teams.forEach(function(t){ by[t] = []; });
+  for (var g=0; g<G; g++){
+    var o = g*w, di = a[o], hi = a[o+1], ai = a[o+2], mins = a[o+3], H = a.subarray(o+4, o+23), A = a.subarray(o+23, o+42);
+    by[s.teams[hi]].push({di:di, home:1, opp:s.teams[ai], mins:mins, o:H, p:A});
+    by[s.teams[ai]].push({di:di, home:0, opp:s.teams[hi], mins:mins, o:A, p:H});
+  }
+  return CACHE[k] = {teams:s.teams, dates:s.dates, games:by, G:G};
+}
+function poss(b){ return b[2] + 0.44*b[6] - b[7] + b[12]; }
+function aggregate(list, net){
+  var A = {G:0, W:0, o:[], p:[], mins:0, pgs:0, closeG:0, closeW:0, sos:0, sosN:0}, i;
+  for (i=0;i<19;i++){ A.o.push(0); A.p.push(0); }
+  list.forEach(function(r){
+    A.G++; if (r.o[0] > r.p[0]) A.W++;
+    for (i=0;i<19;i++){ A.o[i] += r.o[i]; A.p[i] += r.p[i]; }
+    A.mins += r.mins; A.pgs += (poss(r.o) + poss(r.p)) / 2;
+    if (Math.abs(r.o[0] - r.p[0]) <= 5){ A.closeG++; if (r.o[0] > r.p[0]) A.closeW++; }
+    if (net && net[r.opp] !== undefined && net[r.opp] !== null){ A.sos += net[r.opp]; A.sosN++; }
+  });
+  A.poss = poss(A.o); A.opos = poss(A.p);
+  return A;
+}
+function netOf(a){ return a.G && a.poss > 0 && a.opos > 0 ? 100*a.o[0]/a.poss - 100*a.p[0]/a.opos : null; }
+function lastN(list, n){ return list.slice(Math.max(0, list.length - n)); }
+function share(b, k){ var t = b[14]+b[15]+b[16]+b[17]+b[18]; return t ? 100*b[k]/t : null; }
+
+/* ---------- the statistics ---------- */
+/* b: which direction is better (high, low, or none); diag: shares the units of net rating, so a y = x line makes sense */
+var STATS = [
+ {k:'win', g:'Results', l:'Win percentage', u:'%', b:'high', t:'Share of games won.', f:function(a){ return a.G ? 100*a.W/a.G : null; }},
+ {k:'margin', g:'Results', l:'Average point margin', u:'', b:'high', diag:1, t:'Points scored minus points allowed, per game.', f:function(a){ return a.G ? (a.o[0]-a.p[0])/a.G : null; }},
+ {k:'close', g:'Results', l:'Win % in close games', u:'%', b:'high', t:'Win percentage in games decided by 5 points or fewer. Needs a few close games to mean anything.', f:function(a){ return a.closeG ? 100*a.closeW/a.closeG : null; }},
+ {k:'sos', g:'Results', l:'Strength of schedule', u:'', b:'none', diag:1, t:'The average season net rating of the opponents faced in these games. Higher means a harder schedule.', f:function(a){ return a.sosN ? a.sos/a.sosN : null; }},
+ {k:'net', g:'Ratings', l:'Net rating', u:'', b:'high', diag:1, t:'Offensive rating minus defensive rating: points per 100 possessions better than the opponent.', f:function(a){ return netOf(a); }},
+ {k:'ortg', g:'Ratings', l:'Offensive rating', u:'', b:'high', t:'Points scored per 100 possessions. Possessions are estimated from the box score.', f:function(a){ return a.G && a.poss > 0 ? 100*a.o[0]/a.poss : null; }},
+ {k:'drtg', g:'Ratings', l:'Defensive rating', u:'', b:'low', t:'Points allowed per 100 possessions. Lower is better.', f:function(a){ return a.G && a.opos > 0 ? 100*a.p[0]/a.opos : null; }},
+ {k:'pace', g:'Ratings', l:'Pace', u:'', b:'none', t:'Possessions per 48 minutes, averaged over both teams.', f:function(a){ return a.G && a.mins ? 48*a.pgs/a.mins : null; }},
+ {k:'ppg', g:'Ratings', l:'Points scored per game', u:'', b:'high', t:'Average points scored.', f:function(a){ return a.G ? a.o[0]/a.G : null; }},
+ {k:'oppg', g:'Ratings', l:'Points allowed per game', u:'', b:'low', t:'Average points allowed. Lower is better.', f:function(a){ return a.G ? a.p[0]/a.G : null; }},
+ {k:'efg', g:'Shooting', l:'Effective FG%', u:'%', b:'high', t:'Field goal percentage that gives a made three its extra half-point.', f:function(a){ return a.o[2] ? 100*(a.o[1]+0.5*a.o[3])/a.o[2] : null; }},
+ {k:'oefg', g:'Shooting', l:'Opponent effective FG%', u:'%', b:'low', t:'The effective field goal percentage opponents shoot against this team. Lower is better.', f:function(a){ return a.p[2] ? 100*(a.p[1]+0.5*a.p[3])/a.p[2] : null; }},
+ {k:'ts', g:'Shooting', l:'True shooting %', u:'%', b:'high', t:'Points per shooting possession, counting free throws: points / (2 x (FGA + 0.44 x FTA)).', f:function(a){ var d = 2*(a.o[2]+0.44*a.o[6]); return d ? 100*a.o[0]/d : null; }},
+ {k:'tp', g:'Shooting', l:'3-point %', u:'%', b:'high', t:'Share of three-point attempts that go in.', f:function(a){ return a.o[4] ? 100*a.o[3]/a.o[4] : null; }},
+ {k:'otp', g:'Shooting', l:'Opponent 3-point %', u:'%', b:'low', t:'Share of opponents\u2019 three-point attempts that go in. Lower is better, and a lot of it is luck.', f:function(a){ return a.p[4] ? 100*a.p[3]/a.p[4] : null; }},
+ {k:'tpar', g:'Shooting', l:'3-point attempt share', u:'%', b:'none', t:'Threes as a share of all field goal attempts.', f:function(a){ return a.o[2] ? 100*a.o[4]/a.o[2] : null; }},
+ {k:'otpar', g:'Shooting', l:'Opponent 3-point attempt share', u:'%', b:'none', t:'Threes as a share of the shots opponents take against this team.', f:function(a){ return a.p[2] ? 100*a.p[4]/a.p[2] : null; }},
+ {k:'ftr', g:'Free throws', l:'Free throw rate', u:'', b:'high', t:'Free throw attempts per 100 field goal attempts: who gets to the line.', f:function(a){ return a.o[2] ? 100*a.o[6]/a.o[2] : null; }},
+ {k:'oftr', g:'Free throws', l:'Opponent free throw rate', u:'', b:'low', t:'Free throw attempts opponents get per 100 field goal attempts: who fouls. Lower is better.', f:function(a){ return a.p[2] ? 100*a.p[6]/a.p[2] : null; }},
+ {k:'ftp', g:'Free throws', l:'Free throw %', u:'%', b:'high', t:'Share of free throws made.', f:function(a){ return a.o[6] ? 100*a.o[5]/a.o[6] : null; }},
+ {k:'tov', g:'Possessions and rebounding', l:'Turnovers per 100 possessions', u:'', b:'low', t:'Turnovers committed per 100 possessions. Lower is better.', f:function(a){ return a.poss > 0 ? 100*a.o[12]/a.poss : null; }},
+ {k:'otov', g:'Possessions and rebounding', l:'Opponent turnovers per 100 possessions', u:'', b:'high', t:'Turnovers forced per 100 opponent possessions. Higher is better.', f:function(a){ return a.opos > 0 ? 100*a.p[12]/a.opos : null; }},
+ {k:'orb', g:'Possessions and rebounding', l:'Offensive rebound %', u:'%', b:'high', t:'Share of available offensive rebounds grabbed.', f:function(a){ var d = a.o[7]+a.p[8]; return d ? 100*a.o[7]/d : null; }},
+ {k:'drb', g:'Possessions and rebounding', l:'Defensive rebound %', u:'%', b:'high', t:'Share of available defensive rebounds grabbed.', f:function(a){ var d = a.o[8]+a.p[7]; return d ? 100*a.o[8]/d : null; }},
+ {k:'ast', g:'Possessions and rebounding', l:'Assists per 100 possessions', u:'', b:'high', t:'Assists per 100 possessions.', f:function(a){ return a.poss > 0 ? 100*a.o[9]/a.poss : null; }},
+ {k:'stl', g:'Possessions and rebounding', l:'Steals per 100 opponent possessions', u:'', b:'high', t:'Steals per 100 opponent possessions.', f:function(a){ return a.opos > 0 ? 100*a.o[10]/a.opos : null; }},
+ {k:'blk', g:'Possessions and rebounding', l:'Blocks per 100 opponent possessions', u:'', b:'high', t:'Blocks per 100 opponent possessions.', f:function(a){ return a.opos > 0 ? 100*a.o[11]/a.opos : null; }},
+ {k:'pf', g:'Possessions and rebounding', l:'Fouls per 100 opponent possessions', u:'', b:'low', t:'Personal fouls committed per 100 opponent possessions. Lower is better.', f:function(a){ return a.opos > 0 ? 100*a.o[13]/a.opos : null; }},
+ {k:'rimsh', g:'Shot locations', l:'Share of shots at the rim', u:'%', b:'none', t:'Share of this team\u2019s tracked shots that come in the restricted area.', f:function(a){ return share(a.o, 14); }},
+ {k:'orimsh', g:'Shot locations', l:'Opponent share of shots at the rim', u:'%', b:'none', t:'Share of opponents\u2019 tracked shots against this team that come in the restricted area.', f:function(a){ return share(a.p, 14); }},
+ {k:'midsh', g:'Shot locations', l:'Share of shots from mid-range', u:'%', b:'none', t:'Share of this team\u2019s tracked shots taken between the paint and the three-point line.', f:function(a){ return share(a.o, 16); }},
+ {k:'omidsh', g:'Shot locations', l:'Opponent share of shots from mid-range', u:'%', b:'none', t:'Share of opponents\u2019 tracked shots against this team that are mid-range.', f:function(a){ return share(a.p, 16); }},
+ {k:'ab3sh', g:'Shot locations', l:'Share of shots: above-the-break threes', u:'%', b:'none', t:'Share of this team\u2019s tracked shots that are threes from the wings, slots and top of the key.', f:function(a){ return share(a.o, 17); }},
+ {k:'oab3sh', g:'Shot locations', l:'Opponent share of shots: above-the-break threes', u:'%', b:'none', t:'Share of opponents\u2019 tracked shots that are above-the-break threes.', f:function(a){ return share(a.p, 17); }},
+ {k:'c3sh', g:'Shot locations', l:'Share of shots: corner threes', u:'%', b:'none', t:'Share of this team\u2019s tracked shots that are corner threes.', f:function(a){ return share(a.o, 18); }},
+ {k:'oc3sh', g:'Shot locations', l:'Opponent share of shots: corner threes', u:'%', b:'none', t:'Share of opponents\u2019 tracked shots that are corner threes. Corner threes are the shortest and most efficient threes.', f:function(a){ return share(a.p, 18); }},
+ {k:'hnet', g:'Home and away', l:'Home net rating', u:'', b:'high', diag:1, t:'Net rating in home games within the selected games.', f:function(a, c){ return netOf(aggregate(c.list.filter(function(r){ return r.home; }))); }},
+ {k:'anet', g:'Home and away', l:'Away net rating', u:'', b:'high', diag:1, t:'Net rating in road games within the selected games.', f:function(a, c){ return netOf(aggregate(c.list.filter(function(r){ return !r.home; }))); }},
+ {k:'net5', g:'Recent form (always the latest games)', l:'Net rating, last 5 games', u:'', b:'high', diag:1, t:'Net rating over each team\u2019s most recent 5 games, whatever the Games setting is.', f:function(a, c){ return netOf(aggregate(lastN(c.full, 5))); }},
+ {k:'net10', g:'Recent form (always the latest games)', l:'Net rating, last 10 games', u:'', b:'high', diag:1, t:'Net rating over each team\u2019s most recent 10 games, whatever the Games setting is.', f:function(a, c){ return netOf(aggregate(lastN(c.full, 10))); }},
+ {k:'net20', g:'Recent form (always the latest games)', l:'Net rating, last 20 games', u:'', b:'high', diag:1, t:'Net rating over each team\u2019s most recent 20 games, whatever the Games setting is.', f:function(a, c){ return netOf(aggregate(lastN(c.full, 20))); }},
+ {k:'win10', g:'Recent form (always the latest games)', l:'Win % in last 10 games', u:'%', b:'high', t:'Win percentage over each team\u2019s most recent 10 games, whatever the Games setting is.', f:function(a, c){ var x = aggregate(lastN(c.full, 10)); return x.G ? 100*x.W/x.G : null; }}
+];
+var SBY = {}; STATS.forEach(function(s){ SBY[s.k] = s; });
+var PRESETS = [
+ {n:'Offense vs. defense', x:'drtg', y:'ortg'},
+ {n:'Recent form', x:'net', y:'net10', win:'season'},
+ {n:'Luck check', x:'net', y:'win'},
+ {n:'Pace and efficiency', x:'pace', y:'ortg'},
+ {n:'Three-point reliance', x:'tp', y:'tpar'},
+ {n:'Shot-making vs. shot-defending', x:'oefg', y:'efg'},
+ {n:'Possession battle', x:'tov', y:'orb'},
+ {n:'Free throws', x:'oftr', y:'ftr'},
+ {n:'How defenses defend', x:'orimsh', y:'otpar'},
+ {n:'Home vs. away', x:'hnet', y:'anet', win:'season'},
+ {n:'Schedule strength', x:'sos', y:'net'},
+ {n:'Close games', x:'net', y:'close'}
+];
+var WINS = [['season','Whole season'],['l5','Last 5 games'],['l10','Last 10 games'],['l20','Last 20 games'],['home','Home games'],['away','Away games']];
+var WIN_TEXT = {season:'the whole season', l5:'each team\u2019s last 5 games', l10:'each team\u2019s last 10 games', l20:'each team\u2019s last 20 games', home:'home games only', away:'road games only'};
+
+/* ---------- computing a table of teams ---------- */
+function compute(season, win){
+  var sg = seasonGames(season); if (!sg) return {};
+  var seasonNet = {}, out = {};
+  sg.teams.forEach(function(t){ seasonNet[t] = netOf(aggregate(sg.games[t])); });
+  sg.teams.forEach(function(t){
+    var full = sg.games[t], list = win === 'season' ? full : win === 'home' ? full.filter(function(r){ return r.home; }) : win === 'away' ? full.filter(function(r){ return !r.home; }) : lastN(full, +win.slice(1));
+    var a = aggregate(list, seasonNet), c = {list:list, full:full}, row = {G:a.G, W:a.W, L:a.G - a.W};
+    STATS.forEach(function(s){ row[s.k] = a.G ? s.f(a, c) : null; });
+    out[t] = row;
+  });
+  return out;
+}
+
+/* ---------- state and markup ---------- */
+var S = {season:CUR, win:'season', x:'drtg', y:'ortg', flip:true, focus:'MEM', sort:null, dir:1, pinned:null};
+var DATA = {};
+function optGroups(selected){
+  var groups = [], seen = {};
+  STATS.forEach(function(s){ if (!seen[s.g]){ seen[s.g] = []; groups.push([s.g, seen[s.g]]); } seen[s.g].push(s); });
+  return groups.map(function(g){ return '<optgroup label="'+esc(g[0])+'">'+g[1].map(function(s){ return '<option value="'+s.k+'"'+(s.k === selected ? ' selected' : '')+'>'+esc(s.l)+'</option>'; }).join('')+'</optgroup>'; }).join('');
+}
+function build(){
+  var seasons = Object.keys(TGD).sort().reverse();
+  var teamOpts = Object.keys(NAMES).sort(function(a,b){ return NAMES[a] < NAMES[b] ? -1 : 1; }).map(function(t){ return '<option value="'+t+'"'+(t === S.focus ? ' selected' : '')+'>'+esc(NAMES[t])+'</option>'; }).join('');
+  el('view-stats').innerHTML =
+    '<h1>Team stats</h1><div class="lhead"><p class="lede" id="ts-lede">&nbsp;</p></div><div class="banner" id="sb-s" hidden></div>'+
+    '<section class="card tsctl" aria-label="Chart controls"><div class="tsrow">'+
+      '<div class="field"><label for="ts-season">Season</label><select id="ts-season">'+seasons.map(function(k){ return '<option value="'+k+'">'+(+k-1)+'-'+String(k).slice(2)+(k === CUR ? ' (in progress)' : '')+'</option>'; }).join('')+'</select></div>'+
+      '<div class="field"><label for="ts-win">Games</label><select id="ts-win">'+WINS.map(function(w){ return '<option value="'+w[0]+'">'+w[1]+'</option>'; }).join('')+'</select></div>'+
+      '<div class="field"><label for="ts-focus">Highlight a team</label><select id="ts-focus"><option value="">No team</option>'+teamOpts+'</select></div>'+
+    '</div><div class="tsrow tsaxes">'+
+      '<div class="field"><label for="ts-y">Up the side (y axis)</label><select id="ts-y">'+optGroups(S.y)+'</select></div>'+
+      '<button type="button" class="swapbtn" id="ts-swap" title="Swap the two axes" aria-label="Swap the two axes">\u21C4</button>'+
+      '<div class="field"><label for="ts-x">Across the bottom (x axis)</label><select id="ts-x">'+optGroups(S.x)+'</select></div>'+
+      '<button type="button" class="randbtn" id="ts-random" title="Pick two statistics at random (they can be the same one)" aria-label="Pick two random statistics">\uD83C\uDFB2 Random</button>'+
+    '</div><div class="checks"><label><input type="checkbox" id="ts-flip" checked> Reverse an axis when lower is better, so better is always up and to the right</label></div>'+
+    '<div class="presets" id="ts-presets" role="group" aria-label="Preset charts"></div><p class="smn randnote" id="ts-rand" role="status" aria-live="polite"></p></section>'+
+    '<section class="card tschart" aria-labelledby="ts-title"><h2 id="ts-title"></h2><p class="smn" id="ts-sub"></p>'+
+      '<div class="tswrap" id="ts-wrap"><svg id="ts-svg" role="group" aria-label="Scatter chart of team statistics" aria-describedby="ts-sr"></svg><div class="tip" id="ts-tip" role="status"></div></div>'+
+      '<p class="smn" id="ts-notes"></p><p class="tsfocus" id="ts-focussum"></p><p class="sr" id="ts-sr"></p></section>'+
+    '<section class="card tstable" aria-labelledby="ts-th"><h2 id="ts-th">All 30 teams</h2><p class="smn">Click a column heading to sort. Click a team to highlight it above.</p><div class="scroll"><table id="ts-table"><thead></thead><tbody></tbody></table></div></section>'+
+    '<section class="card tsdefs"><details><summary>What these stats mean</summary><div id="ts-defs"></div></details></section>';
+  el('ts-season').value = S.season; el('ts-win').value = S.win; el('ts-focus').value = S.focus;
+  el('ts-presets').innerHTML = PRESETS.map(function(p, i){ return '<button type="button" class="chip" data-p="'+i+'" aria-pressed="false">'+esc(p.n)+'</button>'; }).join('');
+  var g = '', last = '';
+  STATS.forEach(function(s){ if (s.g !== last){ g += (last ? '</dl>' : '')+'<h3>'+esc(s.g)+'</h3><dl>'; last = s.g; } g += '<dt>'+esc(s.l)+(s.b === 'low' ? ' <span class="lowtag">lower is better</span>' : '')+'</dt><dd>'+esc(s.t)+'</dd>'; });
+  el('ts-defs').innerHTML = '<p>Everything comes from official box scores and shot locations for regular-season games. Ratings are per 100 possessions, with possessions estimated from the box score (field goal attempts + 0.44 x free throw attempts - offensive rebounds + turnovers), so they will not match NBA.com to the decimal. Shot-location shares use the same tracked shots as the Shot charts tab.</p>'+g+'</dl>';
+}
+
+/* ---------- formatting and ranks ---------- */
+function fmt(s, v){ return v === null || v === undefined || isNaN(v) ? '\u2013' : v.toFixed(1)+(s.u === '%' ? '%' : ''); }
+function dirOf(s){ return s.b === 'low' ? 1 : -1; }          // sort direction that puts the best team first
+function rankOf(team, key){
+  var s = SBY[key]; if (s.b === 'none') return null;
+  var v = DATA[team][key]; if (v === null) return null;
+  var better = 0, n = 0;
+  Object.keys(DATA).forEach(function(t){ var u = DATA[t][key]; if (u === null) return; n++; if (s.b === 'high' ? u > v : u < v) better++; });
+  return {r:better + 1, n:n};
+}
+function niceTicks(lo, hi, n){
+  var span = hi - lo, raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag, step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag, out = [], t = Math.ceil(lo / step) * step;
+  for (; t <= hi + 1e-9; t += step) out.push(Math.abs(t) < 1e-9 ? 0 : t);
+  return {ticks:out, step:step};
+}
+
+/* ---------- the chart ---------- */
+var VIEWBOX = {W:760, H:560, ml:62, mr:24, mt:22, mb:58};
+var plotted = [];
+function drawChart(){
+  var sx = SBY[S.x], sy = SBY[S.y], svg = el('ts-svg'), V = VIEWBOX;
+  V.W = Math.max(300, el('ts-wrap').clientWidth || 760); V.H = Math.round(Math.max(380, Math.min(640, V.W * 0.72)));
+  var narrow = V.W < 560, rad = V.W < 520 ? 12 : 14; V.ml = V.W < 520 ? 52 : 62; V.mb = V.W < 520 ? 64 : 58;
+  var revX = S.flip && sx.b === 'low', revY = S.flip && sy.b === 'low';
+  var teams = Object.keys(DATA).filter(function(t){ return DATA[t][S.x] !== null && DATA[t][S.y] !== null; });
+  var missing = Object.keys(DATA).length - teams.length;
+  if (!teams.length){ svg.setAttribute('viewBox', '0 0 '+V.W+' 120'); svg.innerHTML = '<text x="'+(V.W/2)+'" y="60" text-anchor="middle" style="fill:var(--muted)" font-size="15">No teams have data for this combination yet.</text>'; plotted = []; return; }
+  svg.setAttribute('viewBox', '0 0 '+V.W+' '+V.H);
+  var xs = teams.map(function(t){ return DATA[t][S.x]; }), ys = teams.map(function(t){ return DATA[t][S.y]; });
+  function dom(a){ var lo = Math.min.apply(null, a), hi = Math.max.apply(null, a), p = Math.max((hi - lo) * 0.09, 0.4); return [lo - p, hi + p]; }
+  var dx = dom(xs), dy = dom(ys), mx = xs.reduce(function(a,b){ return a+b; }, 0) / xs.length, my = ys.reduce(function(a,b){ return a+b; }, 0) / ys.length;
+  function X(v){ var f = (v - dx[0]) / (dx[1] - dx[0]); if (revX) f = 1 - f; return V.ml + (V.W - V.ml - V.mr) * f; }
+  function Y(v){ var f = (v - dy[0]) / (dy[1] - dy[0]); if (!revY) f = 1 - f; return V.mt + (V.H - V.mt - V.mb) * f; }
+  var out = '', i, tk;
+  tk = niceTicks(dx[0], dx[1], 6);
+  tk.ticks.forEach(function(v){ out += '<line x1="'+X(v).toFixed(1)+'" x2="'+X(v).toFixed(1)+'" y1="'+V.mt+'" y2="'+(V.H-V.mb)+'" style="stroke:var(--rule)"/><text x="'+X(v).toFixed(1)+'" y="'+(V.H-V.mb+17)+'" text-anchor="middle" font-size="11.5" style="fill:var(--muted)">'+(Math.abs(tk.step) < 1 ? v.toFixed(1) : v.toFixed(0))+'</text>'; });
+  tk = niceTicks(dy[0], dy[1], 6);
+  tk.ticks.forEach(function(v){ out += '<line x1="'+V.ml+'" x2="'+(V.W-V.mr)+'" y1="'+Y(v).toFixed(1)+'" y2="'+Y(v).toFixed(1)+'" style="stroke:var(--rule)"/><text x="'+(V.ml-8)+'" y="'+(Y(v)+4).toFixed(1)+'" text-anchor="end" font-size="11.5" style="fill:var(--muted)">'+(Math.abs(tk.step) < 1 ? v.toFixed(1) : v.toFixed(0))+'</text>'; });
+  // averages
+  out += '<line x1="'+X(mx).toFixed(1)+'" x2="'+X(mx).toFixed(1)+'" y1="'+V.mt+'" y2="'+(V.H-V.mb)+'" style="stroke:var(--cline)" stroke-dasharray="5 5"/><line x1="'+V.ml+'" x2="'+(V.W-V.mr)+'" y1="'+Y(my).toFixed(1)+'" y2="'+Y(my).toFixed(1)+'" style="stroke:var(--cline)" stroke-dasharray="5 5"/>';
+  out += '<text x="'+(X(mx)+5).toFixed(1)+'" y="'+(V.mt+11)+'" font-size="10.5" style="fill:var(--muted)">average '+mx.toFixed(1)+'</text><text x="'+(V.W-V.mr-4)+'" y="'+(Y(my)-5).toFixed(1)+'" text-anchor="end" font-size="10.5" style="fill:var(--muted)">average '+my.toFixed(1)+'</text>';
+  // y = x line for stats that share the units of net rating
+  if (sx.diag && sy.diag && !revX && !revY){
+    var lo = Math.max(dx[0], dy[0]), hi = Math.min(dx[1], dy[1]);
+    if (hi > lo){ var q = lo + 0.74 * (hi - lo); out += '<line x1="'+X(lo).toFixed(1)+'" y1="'+Y(lo).toFixed(1)+'" x2="'+X(hi).toFixed(1)+'" y2="'+Y(hi).toFixed(1)+'" style="stroke:var(--cold)" stroke-width="1.5" stroke-dasharray="2 4"/><text x="'+(X(q)+12).toFixed(1)+'" y="'+(Y(q)+20).toFixed(1)+'" font-size="10.5" style="fill:var(--cold)">same on both axes</text>'; }
+  }
+  // corner hints when both axes have a better direction
+  var dirX = sx.b !== 'none', dirY = sy.b !== 'none';
+  if (dirX && dirY && (S.flip || (sx.b === 'high' && sy.b === 'high'))){
+    out += '<text x="'+(V.W-V.mr-6)+'" y="'+(V.mt+26)+'" text-anchor="end" font-size="12" font-style="italic" style="fill:var(--muted)">better on both \u2197</text><text x="'+(V.ml+8)+'" y="'+(V.H-V.mb-10)+'" font-size="12" font-style="italic" style="fill:var(--muted)">\u2199 worse on both</text>';
+  }
+  var xLab = sx.l+(revX ? (narrow ? ' (reversed)' : ' (reversed: lower is better, so it runs right to left)') : sx.b === 'low' ? (narrow ? '' : ' (lower is better)') : ''), yLab = sy.l+(revY ? (narrow ? ' (reversed)' : ' (reversed: lower is better)') : sy.b === 'low' ? (narrow ? '' : ' (lower is better)') : '');
+  function fit(t, px){ var m = Math.max(10, Math.floor(px / 7.2)); return t.length > m ? t.slice(0, m - 1)+'\u2026' : t; }
+  xLab = fit(xLab, V.W - V.ml - V.mr); yLab = fit(yLab, V.H - V.mt - V.mb);
+  out += '<text x="'+((V.ml+V.W-V.mr)/2)+'" y="'+(V.H-12)+'" text-anchor="middle" font-size="13" font-weight="600" style="fill:var(--ink)">'+esc(xLab)+'</text>';
+  out += '<text transform="translate(16 '+((V.mt+V.H-V.mb)/2)+') rotate(-90)" text-anchor="middle" font-size="13" font-weight="600" style="fill:var(--ink)">'+esc(yLab)+'</text>';
+  // teams, the highlighted one on top
+  plotted = teams.map(function(t){ return {t:t, x:X(DATA[t][S.x]), y:Y(DATA[t][S.y])}; });
+  var order = plotted.slice().sort(function(a,b){ return (a.t === S.focus) - (b.t === S.focus) || a.y - b.y; });
+  var tabbed = plotted.slice().sort(function(a,b){ return a.x - b.x; })[0].t;
+  order.forEach(function(p){
+    var f = p.t === S.focus, r = f ? rad + 3 : rad;
+    out += '<g class="td'+(f ? ' sel' : '')+'" data-team="'+p.t+'" tabindex="'+(p.t === tabbed ? 0 : -1)+'" role="button" aria-label="'+esc(NAMES[p.t])+': '+esc(sx.l)+' '+fmt(sx, DATA[p.t][S.x])+', '+esc(sy.l)+' '+fmt(sy, DATA[p.t][S.y])+'">'+
+      '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+r+'"/><text x="'+p.x.toFixed(1)+'" y="'+(p.y+3.6).toFixed(1)+'" text-anchor="middle" font-size="'+(narrow ? (f ? 9.5 : 8.5) : (f ? 10.5 : 9.5))+'" font-weight="700">'+p.t+'</text></g>';
+  });
+  svg.innerHTML = out;
+  var notes = [];
+  if (narrow && (revX || revY)) notes.push('Reversed axes: where lower is better, the axis runs backwards so better is always up and to the right.');
+  if (missing) notes.push(missing+' team'+(missing === 1 ? ' has' : 's have')+' no value for one of these stats in this selection and '+(missing === 1 ? 'is' : 'are')+' left off.');
+  if (S.win !== 'season' && (sx.g.indexOf('Recent') === 0 || sy.g.indexOf('Recent') === 0)) notes.push('The recent-form stats always cover each team\u2019s latest games, so the Games setting does not change them.');
+  if ((sx.k === 'hnet' || sx.k === 'anet' || sy.k === 'hnet' || sy.k === 'anet') && (S.win === 'home' || S.win === 'away')) notes.push('Home and away net ratings need both kinds of game, so they are empty when the Games setting is Home games or Away games.');
+  if (sx.k === 'close' || sy.k === 'close') notes.push('Close games are rare early in a season and results in them are mostly luck, so treat this one cautiously.');
+  el('ts-notes').textContent = notes.join(' ');
+}
+
+/* ---------- table, text and presets ---------- */
+function sortedTeams(){
+  var key = S.sort || S.y, dir = S.sort ? S.dir : (SBY[key] ? dirOf(SBY[key]) : -1);
+  function val(t){ return key === 'team' ? NAMES[t] : key === 'rec' ? DATA[t].W / Math.max(1, DATA[t].G) : key === 'G' ? DATA[t].G : DATA[t][key]; }
+  return Object.keys(DATA).sort(function(a, b){
+    var va = val(a), vb = val(b), na = va === null || va === undefined, nb = vb === null || vb === undefined;
+    if (na || nb) return na && nb ? 0 : na ? 1 : -1;
+    var c = typeof va === 'string' ? (va < vb ? -1 : va > vb ? 1 : 0) : va - vb;
+    return c * dir || (NAMES[a] < NAMES[b] ? -1 : 1);
+  });
+}
+function renderTable(){
+  var cols = [['team','Team'],['rec','Record'],['G','Games']], seen = {};
+  [S.y, S.x, 'net', 'ortg', 'drtg', 'pace'].forEach(function(k){ if (!seen[k]){ seen[k] = 1; cols.push([k, SBY[k].l]); } });
+  var key = S.sort || S.y, dir = S.sort ? S.dir : (SBY[key] ? dirOf(SBY[key]) : -1);
+  el('ts-table').querySelector('thead').innerHTML = '<tr>'+cols.map(function(c){
+    var on = key === c[0];
+    return '<th scope="col"'+(on ? ' aria-sort="'+(dir === 1 ? 'ascending' : 'descending')+'"' : '')+'><button type="button" class="sortbtn" data-k="'+c[0]+'">'+esc(c[1])+(on ? (dir === 1 ? ' \u25B2' : ' \u25BC') : '')+'</button></th>';
+  }).join('')+'</tr>';
+  var rows = sortedTeams().map(function(t){
+    var d = DATA[t];
+    return '<tr data-team="'+t+'" class="'+(t === 'MEM' ? 'mem ' : '')+(t === S.focus ? 'sel' : '')+'"><td class="l"><span class="tmn" role="link" tabindex="0" data-team="'+t+'">'+esc(NAMES[t])+'</span></td><td>'+d.W+'-'+d.L+'</td><td>'+d.G+'</td>'+
+      cols.slice(3).map(function(c){ return '<td'+(c[0] === S.x || c[0] === S.y ? ' class="hl"' : '')+'>'+fmt(SBY[c[0]], d[c[0]])+'</td>'; }).join('')+'</tr>';
+  }).join('');
+  el('ts-table').querySelector('tbody').innerHTML = rows;
+}
+function renderFocus(){
+  var t = S.focus, box = el('ts-focussum');
+  if (!t || !DATA[t]){ box.innerHTML = ''; return; }
+  var d = DATA[t], bits = [S.y, S.x].map(function(k){ var s = SBY[k], r = rankOf(t, k); return esc(s.l)+' <b>'+fmt(s, d[k])+'</b>'+(r ? ' (#'+r.r+' of '+r.n+')' : ''); });
+  box.innerHTML = '<b>'+esc(NAMES[t])+'</b> ('+d.W+'-'+d.L+' in these '+d.G+(d.G === 1 ? ' game' : ' games')+'): '+bits.join('; ')+'. <button type="button" class="linkbtn" id="ts-opendef">See where opponents shoot against '+esc(NAMES[t])+' \u203A</button>';
+}
+function renderAll(){
+  DATA = compute(S.season, S.win);
+  var sx = SBY[S.x], sy = SBY[S.y], label = (+S.season-1)+'-'+String(S.season).slice(2);
+  el('ts-title').textContent = sy.l+' vs. '+sx.l;
+  el('ts-sub').textContent = label+' \u00B7 '+WIN_TEXT[S.win][0].toUpperCase()+WIN_TEXT[S.win].slice(1)+' \u00B7 regular season'+(S.season === CUR ? ', through '+fmtDay(L.asof) : '')+'. Dashed lines mark the average of the 30 teams.';
+  drawChart(); renderTable(); renderFocus();
+  Array.prototype.forEach.call(document.querySelectorAll('#ts-presets .chip'), function(b){ var p = PRESETS[+b.getAttribute('data-p')]; b.setAttribute('aria-pressed', p.x === S.x && p.y === S.y ? 'true' : 'false'); });
+  el('ts-sr').textContent = 'Scatter chart of 30 teams: '+sy.l+' against '+sx.l+'. Use the arrow keys to move between teams; the table below lists every value.';
+  el('ts-y').value = S.y; el('ts-x').value = S.x;
+}
+
+/* ---------- interaction ---------- */
+function showTip(team, p){
+  var wrap = el('ts-wrap'), tip = el('ts-tip'), sx = SBY[S.x], sy = SBY[S.y], d = DATA[team], rx = rankOf(team, S.x), ry = rankOf(team, S.y), svg = el('ts-svg');
+  var sc = svg.getBoundingClientRect().width / VIEWBOX.W || 1;
+  tip.innerHTML = '<b>'+esc(NAMES[team])+'</b>'+d.W+'-'+d.L+' \u00B7 '+d.G+(d.G === 1 ? ' game' : ' games')+'<br>'+esc(sy.l)+': <strong>'+fmt(sy, d[S.y])+'</strong>'+(ry ? ' (#'+ry.r+')' : '')+'<br>'+esc(sx.l)+': <strong>'+fmt(sx, d[S.x])+'</strong>'+(rx ? ' (#'+rx.r+')' : '');
+  tip.style.opacity = 1;
+  var tw = tip.offsetWidth, th = tip.offsetHeight, x = p.x * sc + 18, y = p.y * sc - th / 2;
+  if (x + tw > wrap.clientWidth) x = p.x * sc - tw - 18;
+  tip.style.left = Math.max(0, x)+'px'; tip.style.top = Math.max(0, Math.min(wrap.clientHeight - th, y))+'px';
+}
+function hideTip(){ el('ts-tip').style.opacity = 0; }
+function setFocus(t){ S.focus = t || ''; el('ts-focus').value = S.focus; drawChart(); renderTable(); renderFocus(); }
+function clearRand(){ var r = el('ts-rand'); if (r) r.textContent = ''; }
+function randomPick(){
+  var pool = STATS.filter(function(s){ var n = 0; Object.keys(DATA).forEach(function(t){ if (DATA[t][s.k] !== null && DATA[t][s.k] !== undefined) n++; }); return n >= 20; });
+  if (!pool.length) pool = STATS;
+  var y = pool[Math.floor(Math.random() * pool.length)], x = pool[Math.floor(Math.random() * pool.length)];
+  S.y = y.k; S.x = x.k; S.sort = null; renderAll();
+  el('ts-rand').textContent = 'Random pick: '+y.l+' (up the side) against '+x.l+' (across the bottom).'+(x.k === y.k ? ' Both axes use the same statistic, so every team sits on the diagonal.' : '');
+}
+function wire(){
+  el('ts-season').addEventListener('change', function(e){ S.season = e.target.value; S.sort = null; renderAll(); });
+  el('ts-win').addEventListener('change', function(e){ S.win = e.target.value; renderAll(); });
+  el('ts-x').addEventListener('change', function(e){ S.x = e.target.value; S.sort = null; clearRand(); renderAll(); });
+  el('ts-y').addEventListener('change', function(e){ S.y = e.target.value; S.sort = null; clearRand(); renderAll(); });
+  el('ts-swap').addEventListener('click', function(){ var t = S.x; S.x = S.y; S.y = t; S.sort = null; clearRand(); renderAll(); });
+  el('ts-random').addEventListener('click', randomPick);
+  el('ts-flip').addEventListener('change', function(e){ S.flip = e.target.checked; renderAll(); });
+  el('ts-focus').addEventListener('change', function(e){ setFocus(e.target.value); });
+  el('ts-presets').addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('[data-p]') : null; if (!b) return;
+    var p = PRESETS[+b.getAttribute('data-p')]; S.x = p.x; S.y = p.y; S.sort = null; clearRand(); if (p.win){ S.win = p.win; el('ts-win').value = p.win; } renderAll();
+  });
+  if (window.ResizeObserver){ var lastW = 0; new ResizeObserver(function(){ var w = el('ts-wrap').clientWidth; if (w > 0 && Math.abs(w - lastW) > 2){ lastW = w; if (Object.keys(DATA).length) drawChart(); } }).observe(el('ts-wrap')); }
+  var svg = el('ts-svg');
+  function teamOf(e){ var g = e.target.closest ? e.target.closest('.td') : null; return g ? g.getAttribute('data-team') : null; }
+  svg.addEventListener('pointerover', function(e){ var t = teamOf(e); if (!t) return; var p = plotted.filter(function(q){ return q.t === t; })[0]; if (p) showTip(t, p); });
+  svg.addEventListener('pointerleave', hideTip);
+  svg.addEventListener('click', function(e){ var t = teamOf(e); if (t) setFocus(t === S.focus ? '' : t); });
+  svg.addEventListener('focusin', function(e){ var t = teamOf(e); if (!t) return; var p = plotted.filter(function(q){ return q.t === t; })[0]; if (p) showTip(t, p); });
+  svg.addEventListener('focusout', hideTip);
+  svg.addEventListener('keydown', function(e){
+    var cur = e.target.closest ? e.target.closest('.td') : null, k = e.key;
+    if (!cur) return;
+    var order = plotted.slice().sort(function(a,b){ return a.x - b.x || a.y - b.y; }).map(function(p){ return p.t; }), i = order.indexOf(cur.getAttribute('data-team')), j = i;
+    if (k === 'ArrowRight' || k === 'ArrowDown') j = Math.min(order.length - 1, i + 1);
+    else if (k === 'ArrowLeft' || k === 'ArrowUp') j = Math.max(0, i - 1);
+    else if (k === 'Home') j = 0; else if (k === 'End') j = order.length - 1;
+    else if (k === 'Enter' || k === ' '){ e.preventDefault(); var t = cur.getAttribute('data-team'); setFocus(t === S.focus ? '' : t); var again = svg.querySelector('.td[data-team="'+t+'"]'); if (again) again.focus(); return; }
+    else if (k === 'Escape'){ hideTip(); return; }
+    else return;
+    e.preventDefault();
+    Array.prototype.forEach.call(svg.querySelectorAll('.td'), function(g){ g.setAttribute('tabindex', '-1'); });
+    var nx = svg.querySelector('.td[data-team="'+order[j]+'"]'); if (nx){ nx.setAttribute('tabindex', '0'); nx.focus(); }
+  });
+  el('ts-table').addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('.sortbtn') : null;
+    if (b){ var k = b.getAttribute('data-k'); if (S.sort === k) S.dir = -S.dir; else { S.sort = k; S.dir = k === 'team' ? 1 : (SBY[k] ? dirOf(SBY[k]) : -1); } renderTable(); return; }
+    var t = e.target.closest ? e.target.closest('[data-team]') : null; if (t) setFocus(t.getAttribute('data-team') === S.focus ? '' : t.getAttribute('data-team'));
+  });
+  el('ts-table').addEventListener('keydown', function(e){ if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.tmn')){ e.preventDefault(); setFocus(e.target.getAttribute('data-team')); } });
+  el('ts-focussum').addEventListener('click', function(e){ if (e.target.id === 'ts-opendef' && S.focus && window.NBA_TEAMS) window.NBA_TEAMS.openDefense(S.focus); });
+}
+
+function init(){
+  if (!Object.keys(TGD).length || !Object.keys(NAMES).length){ el('view-stats').innerHTML = '<p>Team stats are not available in this build.</p>'; return; }
+  build(); wire();
+  el('ts-lede').textContent = 'Plot any two team statistics against each other for all 30 teams, over the whole season, the latest games, or home and road games. Pick a preset or choose your own axes. Data through '+fmtDay(L.asof)+' ('+L.games+' games).';
+  var b = el('sb-s'), txt = L.maxg < 20 ? 'Early season: no team has played more than '+L.maxg+' games, so every chart here is a small sample, and the last-5, last-10 and last-20 views are mostly the whole season so far. This notice goes away after 20 team games.' : '';
+  b.textContent = txt; b.hidden = !txt;
+  renderAll();
+}
+window.NBA_TEAMSTATS = {compute:compute, STATS:STATS.map(function(s){ return {k:s.k, l:s.l, b:s.b}; })};
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
 </script>
