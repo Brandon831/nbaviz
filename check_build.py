@@ -33,11 +33,37 @@ for k, t in tg.items():
     want = leaders['games'] if k == leaders['key'] else 1230
     if n != want: problems.append(f'{k}: {n} team-game rows instead of {want}')
 if not leaders.get('sched'): problems.append('no scores or schedule')
+if leaders.get('sched') and any(len(r) != 14 for r in leaders['sched']): problems.append('scores table rows have the wrong shape (nba_build.py and template.html are out of step)')
+lc = leaders.get('lcov', {})
+if sorted(lc) != sorted(seasons): problems.append('lineup data is missing for some seasons')
+for k, (done, total) in lc.items():
+    if k != leaders['key'] and total and done < 0.9 * total: problems.append(f'{k}: lineups rebuilt for only {done} of {total} games')
+    if k == leaders['key'] and total >= 20 and done < 0.75 * total: problems.append(f'{k}: lineups rebuilt for only {done} of {total} games this season')
+gb = leaders.get('gbox') or []
+if len(gb) != leaders['games']: problems.append(f'box scores for {len(gb)} games instead of {leaders["games"]}')
+elif any((not g[2]) or (not g[3]) or g[1] is None for g in gb): problems.append('some games have no box score or score-flow data')
+if not isinstance(leaders.get('remaining'), list): problems.append('the remaining schedule is missing')
+if not leaders.get('builtAt'): problems.append('the build time is missing')
+sn = leaders.get('snapshots')
+if not sn or not sn.get('dates'): problems.append('the award tracker (snapshots) is missing')
+elif any(len(v) != len(sn['dates']) for v in sn['awards'].values()): problems.append('the award tracker has a different number of days per award')
+if cur:
+    if cur.get('gx') and len(base64.b64decode(cur['gx'])) // 2 != len(base64.b64decode(cur['d'])) // 2: problems.append('game tags are not aligned with the shots')
+    if len(cur.get('off', {})) < 30: problems.append('team offense shot zones are missing')
 if not leaders.get('race', {}).get('dates'): problems.append('no MVP race data')
 if len(leaders.get('tcolors', {})) < 30: print('note: team colors are missing for some teams, so the highlighted team will use the default color there')
+arch = shot.get('archive') or {}
+import os
+for k, m in arch.items():
+    u = m.get('url', '')
+    if not u.startswith('http') and not u.startswith('/'):
+        f = os.path.join(os.path.dirname(os.path.abspath(path)), u)
+        if not os.path.exists(f): problems.append(f'archived season {k}: file {u} is missing beside the page')
+        elif os.path.getsize(f) != m.get('bytes'): problems.append(f'archived season {k}: file size differs from the manifest')
+    if m.get('games', 0) < 500: problems.append(f'archived season {k}: only {m.get("games")} games')
 size = len(html.encode('utf-8')) / 1e6
 if size > 15: problems.append(f'page is {size:.1f} MB; the hosting limit is 16 MB')
-print(f'{path}: {size:.2f} MB | seasons {sorted(seasons)} | current season {leaders["key"]}: {leaders["games"]} games through {leaders["asof"]} | {len(leaders["sched"])} schedule rows')
+print(f'{path}: {size:.2f} MB | seasons {sorted(seasons)} | current season {leaders["key"]}: {leaders["games"]} games through {leaders["asof"]} | {len(leaders["sched"])} schedule rows | lineups rebuilt for {sum(v[0] for v in lc.values())} of {sum(v[1] for v in lc.values())} games | archived seasons: {len(arch)}')
 if problems:
     print('PROBLEMS:'); [print(' -', p) for p in problems]; sys.exit(1)
 print('OK')

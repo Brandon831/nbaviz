@@ -25,6 +25,15 @@ COLS = ['minutes','points','field_goals_made','field_goals_attempted','three_poi
         'free_throws_made','free_throws_attempted','offensive_rebounds','defensive_rebounds','rebounds','assists','steals','blocks','turnovers','fouls']
 CV = 5.25 + math.sqrt(23.75**2 - 22**2)
 
+# franchise codes that changed: the data is kept under today's code, with a note on the page
+OLD_CODES = {'NJ': 'BKN', 'SEA': 'OKC', 'NOH': 'NO', 'NOK': 'NO'}
+def readp(path, columns=None):
+    """pandas.read_parquet, then every team-abbreviation column is mapped to today's franchise codes."""
+    d = pd.read_parquet(path, columns=columns)
+    for c in d.columns:
+        if 'abbrev' in c and (d[c].dtype == object or pd.api.types.is_string_dtype(d[c])): d[c] = d[c].astype(object).replace(OLD_CODES)
+    return d
+
 def fetch(raw, kind, y, refresh=False):
     name = {'pbp': f'play_by_play_{y}.parquet', 'box': f'player_box_{y}.parquet', 'sched': f'nba_schedule_{y}.parquet'}[kind]
     tag = {'pbp': 'espn_nba_pbp', 'box': 'espn_nba_player_boxscores', 'sched': 'espn_nba_schedules'}[kind]
@@ -95,7 +104,7 @@ def rank_list(items, mn):
 def cup_game_id(raw, y):
     """The NBA Cup championship game is not part of the official regular season; the schedule labels it explicitly."""
     try:
-        s = pd.read_parquet(fetch(raw, 'sched', y), columns=['id', 'notes_headline'])
+        s = readp(fetch(raw, 'sched', y), columns=['id', 'notes_headline'])
         r = s[s.notes_headline.fillna('').str.contains('Cup Championship|In-Season Tournament Championship')]
         return int(r.id.iloc[0]) if len(r) else None
     except Exception as e:
@@ -108,7 +117,7 @@ def build_season(raw, y, names, cup_id):
     cols = ['home_team_name','away_team_name','home_score','away_score','game_id','game_date','season_type','type_text','text','shooting_play','coordinate_x','coordinate_y',
             'athlete_id_1','athlete_id_2','athlete_id_3','athlete_name_1','scoring_play','team_id','home_team_id','home_team_abbrev','away_team_id','away_team_abbrev']
     cols += [c for c in ('points_attempted', 'score_value') if c in have]
-    d = pd.read_parquet(path, columns=cols)
+    d = readp(path, columns=cols)
     gm = d.drop_duplicates('game_id')
     badg = set(gm[~(gm.home_team_abbrev.isin(STD) & gm.away_team_abbrev.isin(STD))].game_id)      # All-Star and exhibition games
     d = d[~d.game_id.isin(badg)]
@@ -185,23 +194,29 @@ def build_season(raw, y, names, cup_id):
     cnt = pd.DataFrame({'g': s.game_id.values[m0], 'h': home[m0], 'k': GRP[zone[m0]]}).groupby(['g', 'h', 'k']).size()
     shotgrp = {}
     for (g_, h_, k_), n_ in cnt.items(): shotgrp.setdefault((int(g_), int(h_)), [0] * 5)[int(k_)] = int(n_)
-    s = s.assign(val=val, ex=ex, po=po, pid=s.athlete_id_1.astype(int))
+    shooter = np.where(home == 1, s.home_team_abbrev.values, s.away_team_abbrev.values)
+    off = {}
+    for t in TEAM_DIV:
+        m = (shooter == t)
+        off[t] = {'reg': [np.bincount(zone[m & (po == 0)], minlength=14).tolist(), np.bincount(zone[m & (po == 0) & (made == 1)], minlength=14).tolist()],
+                  'po':  [np.bincount(zone[m & (po == 1)], minlength=14).tolist(), np.bincount(zone[m & (po == 1) & (made == 1)], minlength=14).tolist()]}
+    s = s.assign(val=val, ex=ex, po=po, pid=s.athlete_id_1.astype(int), gid=s.game_id.astype(np.int64))
     for pid, nm in s[['pid', 'athlete_name_1']].drop_duplicates('pid').itertuples(index=False): names[int(pid)] = nm
     team = s.groupby('pid').team_id.agg(lambda x: x.value_counts().index[0]).map(tm)
-    pl = []; chunks = []; xchunks = []
+    pl = []; chunks = []; xchunks = []; gchunks = []
     for pid, g in s.groupby('pid', sort=True):
         m0 = g.po.values == 0; m1 = g.po.values == 1
         r = g.val.values[m0]; p = g.val.values[m1]
         pl.append([int(pid), str(team[pid]), int(len(r)), int(len(p)), int(gp.get((int(pid), 0), 0)), int(gp.get((int(pid), 1), 0)), 1 if int(pid) in cupP else 0])
-        chunks += [r, p]; xchunks += [g.ex.values[m0], g.ex.values[m1]]
+        chunks += [r, p]; xchunks += [g.ex.values[m0], g.ex.values[m1]]; gchunks += [g.gid.values[m0], np.full(int(m1.sum()), -1, dtype=np.int64)]
     arr = np.concatenate(chunks).astype('<u2'); xarr = np.concatenate(xchunks).astype('<u2')
     assert len(arr) == len(xarr)
     return {'stand': stand, 'lead': lead, 'cup': cup, 'games': games, 'asof': asof, 'label': f'{y-1}-{str(y)[2:]}', 'pl': pl,
-            'd': base64.b64encode(arr.tobytes()).decode(), 'x': base64.b64encode(xarr.tobytes()).decode(), 'dates': dates, 'opp': opp, '_grp': shotgrp}
+            'd': base64.b64encode(arr.tobytes()).decode(), 'x': base64.b64encode(xarr.tobytes()).decode(), 'dates': dates, 'opp': opp, 'off': off, '_grp': shotgrp, '_gid': np.concatenate(gchunks)}
 
 # ----------------------------------------------------------------------------- box scores: player totals, team ratings, clutch time
 def box_games(raw, y, cup_id):
-    d = pd.read_parquet(fetch(raw, 'box', y)); d = d[d.season_type == 2]
+    d = readp(fetch(raw, 'box', y)); d = d[d.season_type == 2]
     d = d[d.team_abbreviation.isin(STD) & d.opponent_team_abbreviation.isin(STD)]
     if cup_id is not None: d = d[d.game_id != cup_id]
     return d
@@ -230,9 +245,13 @@ def team_ratings(d):
 
 def clutch_rows(raw, y, cup_id):
     """Clutch time = last five minutes of the fourth quarter or overtime with the score within five points (before the play)."""
+    c = clutch_plays(raw, y, cup_id); return clutch_sum(c)
+
+def clutch_plays(raw, y, cup_id):
+    """The clutch plays of a season (with game dates), from which clutch totals through any date can be built."""
     cols = ['game_id','sequence_number','period_number','clock_minutes','clock_seconds','home_score','away_score','scoring_play','score_value','shooting_play','type_text',
-            'athlete_id_1','athlete_id_2','season_type','home_team_abbrev','away_team_abbrev']
-    d = pd.read_parquet(fetch(raw, 'pbp', y), columns=cols)
+            'athlete_id_1','athlete_id_2','season_type','home_team_abbrev','away_team_abbrev','game_date']
+    d = readp(fetch(raw, 'pbp', y), columns=cols)
     gm = d.drop_duplicates('game_id'); bad = set(gm[~(gm.home_team_abbrev.isin(STD) & gm.away_team_abbrev.isin(STD))].game_id)
     d = d[~d.game_id.isin(bad) & (d.season_type == 2)]
     if cup_id is not None: d = d[d.game_id != cup_id]
@@ -240,6 +259,10 @@ def clutch_rows(raw, y, cup_id):
     d['hs0'] = d.groupby('game_id').home_score.shift(1).fillna(0); d['as0'] = d.groupby('game_id').away_score.shift(1).fillna(0)
     d['sec'] = d.clock_minutes * 60 + d.clock_seconds
     c = d[(d.period_number >= 4) & (d.sec <= 300) & ((d.hs0 - d.as0).abs() <= 5)].copy()
+    return c
+
+def clutch_sum(c):
+    """Clutch totals per player from a set of clutch plays c (see clutch_rows)."""
     ft = c.type_text.fillna('').str.startswith('Free Throw'); shot = c.shooting_play.fillna(False).astype(bool); sc = c.scoring_play.fillna(False).astype(bool)
     out = pd.DataFrame(index=pd.Index(sorted(c.athlete_id_1.dropna().astype(int).unique()), name='pid'))
     def add(name, mask, col='athlete_id_1', val=None):
@@ -253,6 +276,7 @@ def clutch_rows(raw, y, cup_id):
     return [[int(pid), int(r.pts), int(r.fgm), int(r.fga), int(r.ftm), int(r.fta), int(r.ast), int(r.tov), int(r.games)] for pid, r in out.astype(float).iterrows()]
 
 # ----------------------------------------------------------------------------- game-by-game team rows (Team stats tab)
+BUILT_AT = None
 TEAMS30 = sorted(TEAM_DIV)
 TG_WIDTH = 42     # per game: date index, home team, away team, minutes, then each team's 19 numbers (box totals, then shots by zone group)
 TG_COLS = ['points', 'field_goals_made', 'field_goals_attempted', 'three_point_field_goals_made', 'three_point_field_goals_attempted', 'free_throws_made',
@@ -262,7 +286,7 @@ def team_games(raw, y, d, shotgrp):
     tot = act.groupby(['game_id', 'team_abbreviation'])[TG_COLS].sum()
     gmin = act.groupby('game_id').minutes.sum() / 10
     meta = d.drop_duplicates(['game_id', 'team_abbreviation'])[['game_id', 'team_abbreviation', 'game_date', 'home_away', 'team_score']]
-    per = pd.read_parquet(fetch(raw, 'pbp', y), columns=['game_id', 'period_number']).groupby('game_id').period_number.max()
+    per = readp(fetch(raw, 'pbp', y), columns=['game_id', 'period_number']).groupby('game_id').period_number.max()
     dates = sorted({str(x) for x in meta.game_date}); didx = {x: i for i, x in enumerate(dates)}; tix = {t: i for i, t in enumerate(TEAMS30)}
     rows = []
     for gid, g in meta.groupby('game_id'):
@@ -278,7 +302,226 @@ def team_games(raw, y, d, shotgrp):
     rows.sort(key=lambda r: (r[0], r[1]))
     arr = np.array([r[2] for r in rows], dtype=np.int64)
     assert arr.shape[1] == TG_WIDTH and arr.max() < 65536 and arr.min() >= 0
-    return {'teams': TEAMS30, 'dates': dates, 'w': TG_WIDTH, 'd': base64.b64encode(arr.astype('<u2').tobytes()).decode()}
+    return {'teams': TEAMS30, 'dates': dates, 'w': TG_WIDTH, 'd': base64.b64encode(arr.astype('<u2').tobytes()).decode(), '_gids': [r[1] for r in rows]}
+
+# ----------------------------------------------------------------------------- lineups and on/off ratings (rebuilt from substitutions)
+TOV_RE = re.compile(r'Turnover|Traveling|Kicked Ball|^Lane$|Double Lane')
+def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True):
+    """Who was on the floor, rebuilt from substitution events, starting from the box-score starters.
+    A game is used only if every lineup stays at exactly five players and every player's rebuilt minutes agree with the box score (within 1.5 minutes);
+    the others are left out rather than guessed at. Possessions are counted from events (field goal attempts + 0.44 x free throw attempts - offensive rebounds + turnovers)."""
+    cache = os.path.join(raw, f'lineups{y}.json')
+    size = os.path.getsize(fetch(raw, 'pbp', y))
+    if use_cache and y != CURRENT and not keep_games and os.path.exists(cache):
+        c = json.load(open(cache))
+        if c.get('pbp_size') == size and c.get('v') == 4: return c['data']
+    cols = ['game_id','sequence_number','period_number','clock_minutes','clock_seconds','type_text','athlete_id_1','athlete_id_2','team_id','home_team_id','away_team_id',
+            'home_team_abbrev','away_team_abbrev','home_score','away_score','shooting_play','season_type']
+    d = readp(fetch(raw, 'pbp', y), columns=cols)
+    gm = d.drop_duplicates('game_id'); bad = set(gm[~(gm.home_team_abbrev.isin(STD) & gm.away_team_abbrev.isin(STD))].game_id)
+    d = d[~d.game_id.isin(bad) & (d.season_type == 2)]
+    if cup_id is not None: d = d[d.game_id != cup_id]
+    # chronological order: period, then game clock counting down, then ESPN's sequence number to break ties (sequence numbers alone sometimes interleave periods)
+    d = d.assign(seq=d.sequence_number.astype(float), neg=-(d.clock_minutes * 60 + d.clock_seconds)).sort_values(['game_id', 'period_number', 'neg', 'seq'])
+    act = box_d[(box_d.did_not_play == False) & box_d.minutes.notna()]
+    starters = {(int(g), int(t)): [int(x) for x in grp.athlete_id] for (g, t), grp in act[act.starter == True].groupby(['game_id', 'team_id'])}
+    boxmin = {(int(g), int(p)): float(m) for g, p, m in zip(act.game_id, act.athlete_id, act.minutes)}
+    abbr = {}
+    for a, b_ in (('home_team_id', 'home_team_abbrev'), ('away_team_id', 'away_team_abbrev')):
+        for i, n in d[[a, b_]].drop_duplicates().itertuples(index=False): abbr[int(i)] = n
+    tt = d.type_text.fillna('').values; has1 = d.athlete_id_1.notna().values
+    is_sub = np.array([x.startswith('Substitution') for x in tt]); is_ft = np.array([x.startswith('Free Throw') for x in tt])
+    is_fga = (d.shooting_play.values == True) & ~is_ft & has1
+    is_oreb = (tt == 'Offensive Rebound') & has1
+    is_tov = np.array([bool(TOV_RE.search(x)) for x in tt]) & has1
+    comp = np.where(is_fga, 1.0, np.where(is_ft, 0.44, np.where(is_oreb, -1.0, np.where(is_tov, 1.0, 0.0))))
+    gid = d.game_id.values; per = d.period_number.values; clk = (d.clock_minutes.values * 60 + d.clock_seconds.values)
+    tid = d.team_id.values; a1 = d.athlete_id_1.values; a2 = d.athlete_id_2.values; hs = d.home_score.values; as_ = d.away_score.values
+    hid_all = d.home_team_id.values; aid_all = d.away_team_id.values
+    bounds = np.flatnonzero(np.r_[True, gid[1:] != gid[:-1], True])
+    lineups = {}; onoff = {}; clean = 0; total = 0; pm_all = {}; flows = {}; errs = []
+    for bi in range(len(bounds) - 1):
+        lo, hi = bounds[bi], bounds[bi + 1]; g = int(gid[lo]); total += 1
+        h, a = int(hid_all[lo]), int(aid_all[lo])
+        if (g, h) not in starters or (g, a) not in starters or len(starters[(g, h)]) != 5 or len(starters[(g, a)]) != 5: continue
+        on = {h: set(starters[(g, h)]), a: set(starters[(g, a)])}; cur = {h: tuple(sorted(on[h])), a: tuple(sorted(on[a]))}; acc = {h: {}, a: {}}
+        def vec(t): return acc[t].setdefault(cur[t], [0.0, 0.0, 0.0, 0.0, 0.0])
+        ok = True; curper = None; tprev = 720.0; ph = pa = 0; elapsed0 = 0.0; marks = []
+        for i in range(lo, hi):
+            p_ = int(per[i])
+            if p_ != curper:
+                if curper is not None and tprev > 0:
+                    for t in (h, a): vec(t)[0] += tprev
+                if curper is not None: elapsed0 += (720.0 if curper <= 4 else 300.0)
+                curper = p_; tprev = 720.0 if p_ <= 4 else 300.0
+            t_ = clk[i]
+            if not (t_ == t_): t_ = tprev
+            t_ = min(max(t_, 0.0), tprev); dt = tprev - t_
+            if dt > 0:
+                for t in (h, a): vec(t)[0] += dt
+            tprev = t_
+            h2 = int(hs[i]) if hs[i] == hs[i] else ph; a2_ = int(as_[i]) if as_[i] == as_[i] else pa
+            dh = h2 - ph; da = a2_ - pa
+            if dh > 0 or da > 0:
+                if dh < 0: dh = 0
+                if da < 0: da = 0
+                vh, va = vec(h), vec(a); vh[1] += dh; vh[2] += da; va[1] += da; va[2] += dh
+            ph, pa = max(ph, h2), max(pa, a2_)
+            if keep_games: marks.append((elapsed0 + (720.0 if p_ <= 4 else 300.0) - tprev, ph - pa))
+            c = comp[i]
+            if c != 0.0 and tid[i] == tid[i]:
+                t = int(tid[i])
+                if t in acc:
+                    o = a if t == h else h; vec(t)[3] += c; vec(o)[4] += c
+            if is_sub[i]:
+                t = int(tid[i]) if tid[i] == tid[i] else -1
+                pin = a1[i]; pout = a2[i]
+                if t not in on or pin != pin or pout != pout or int(pout) not in on[t]: ok = False; break
+                on[t].discard(int(pout)); on[t].add(int(pin))
+                if len(on[t]) != 5: ok = False; break
+                cur[t] = tuple(sorted(on[t]))
+        if not ok: continue
+        if tprev > 0:
+            for t in (h, a): vec(t)[0] += tprev
+        # every player's rebuilt minutes must agree with the box score
+        secp = {}
+        for t in (h, a):
+            for key, v in acc[t].items():
+                for p in key: secp[p] = secp.get(p, 0.0) + v[0]
+        worst = 0.0
+        for p, sec in secp.items():
+            if (g, p) not in boxmin: worst = 99.0; break
+            worst = max(worst, abs(sec / 60.0 - boxmin[(g, p)]))
+        if worst > tol: continue
+        clean += 1; errs.append(worst)
+        for t in (h, a):
+            T = [0.0] * 5
+            for key, v in acc[t].items():
+                for k in range(5): T[k] += v[k]
+                L = lineups.setdefault((abbr[t], key), [0.0] * 6)
+                for k in range(5): L[k] += v[k]
+                L[5] += 1
+            mine = {}
+            for key, v in acc[t].items():
+                for p in key:
+                    m = mine.setdefault(p, [0.0] * 5)
+                    for k in range(5): m[k] += v[k]
+            for p, m in mine.items():
+                o = onoff.setdefault(p, [0] + [0.0] * 10)
+                o[0] += 1
+                for k in range(5): o[1 + k] += m[k]; o[6 + k] += T[k] - m[k]
+                if keep_games: pm_all.setdefault(g, {})[p] = round(m[1] - m[2])
+        if keep_games:
+            fl = []; k = 0; mk = marks
+            end = int(round(elapsed0 + (720.0 if curper <= 4 else 300.0))) // 60
+            for minute in range(end + 1):
+                while k + 1 < len(mk) and mk[k + 1][0] <= minute * 60: k += 1
+                fl.append(mk[k][1] if mk and mk[0][0] <= minute * 60 or minute == 0 else 0)
+            flows[g] = fl
+    # pairs, from every lineup
+    pairs = {}
+    for (team, key), v in lineups.items():
+        for i in range(5):
+            for j in range(i + 1, 5):
+                P = pairs.setdefault((team, key[i], key[j]), [0.0] * 5)
+                for k in range(5): P[k] += v[k]
+    def top(dct, n):
+        by = {}
+        for k, v in dct.items(): by.setdefault(k[0], []).append((k, v))
+        out = {}
+        for team, rows in by.items():
+            rows.sort(key=lambda r: -r[1][0])
+            out[team] = [list(k[1:]) + [round(x, 1) for x in v[:5]] + ([int(v[5])] if len(v) > 5 else []) for k, v in rows[:n]]
+        return out
+    res = {'coverage': [clean, total], 'maxerr': round(float(np.max(errs)), 2) if errs else None,
+           'onoff': {str(p): [int(o[0])] + [round(x, 2) for x in o[1:]] for p, o in onoff.items()},
+           'lineups': top(lineups, 15), 'pairs': top(pairs, 15)}
+    if keep_games: res['pm'] = {str(g): v for g, v in pm_all.items()}; res['flows'] = {str(g): v for g, v in flows.items()}
+    if use_cache and y != CURRENT and not keep_games:
+        json.dump({'v': 4, 'pbp_size': size, 'data': res}, open(cache, 'w'), separators=(',', ':'))
+    return res
+
+def flows_data(raw, y, cup_id):
+    """The score margin (home minus away) at the end of every minute, for every regular-season game. Needs only the scores and the game clock, so it works even for the few games whose lineups cannot be rebuilt."""
+    d = readp(fetch(raw, 'pbp', y), columns=['game_id', 'sequence_number', 'period_number', 'clock_minutes', 'clock_seconds', 'home_team_abbrev', 'away_team_abbrev', 'home_score', 'away_score', 'season_type'])
+    gm = d.drop_duplicates('game_id'); bad = set(gm[~(gm.home_team_abbrev.isin(STD) & gm.away_team_abbrev.isin(STD))].game_id)
+    d = d[~d.game_id.isin(bad) & (d.season_type == 2)]
+    if cup_id is not None: d = d[d.game_id != cup_id]
+    d = d.assign(seq=d.sequence_number.astype(float), neg=-(d.clock_minutes * 60 + d.clock_seconds)).sort_values(['game_id', 'period_number', 'neg', 'seq'])
+    out = {}
+    for g, grp in d.groupby('game_id', sort=False):
+        per = grp.period_number.values; clk = grp.clock_minutes.values * 60 + grp.clock_seconds.values; hs = grp.home_score.values; as_ = grp.away_score.values
+        elapsed0 = 0.0; curper = None; ph = pa = 0; marks = []
+        for i in range(len(grp)):
+            p_ = int(per[i]); length = 720.0 if p_ <= 4 else 300.0
+            if p_ != curper:
+                if curper is not None: elapsed0 += 720.0 if curper <= 4 else 300.0
+                curper = p_
+            t_ = clk[i]; t_ = length if not (t_ == t_) else min(max(float(t_), 0.0), length)
+            h2 = int(hs[i]) if hs[i] == hs[i] else ph; a2 = int(as_[i]) if as_[i] == as_[i] else pa
+            ph, pa = max(ph, h2), max(pa, a2); marks.append((elapsed0 + length - t_, ph - pa))
+        end = int(round(elapsed0 + (720.0 if curper <= 4 else 300.0))) // 60; fl = []; k = 0
+        for minute in range(end + 1):
+            while k + 1 < len(marks) and marks[k + 1][0] <= minute * 60: k += 1
+            fl.append(marks[k][1] if (marks[0][0] <= minute * 60 or minute == 0) else 0)
+        out[str(int(g))] = fl
+    return out
+
+# ----------------------------------------------------------------------------- per-game box scores (season in progress)
+def game_boxes(d, gids, pm, flows):
+    """One entry per game, in the order of the team-game rows: [game id, score margin at the end of each minute or None, home player lines, away player lines].
+    A player line: [id, minutes, pts, reb, ast, stl, blk, tov, pf, fgm, fga, 3pm, 3pa, ftm, fta, oreb, plus-minus or None, started]."""
+    act = d[(d.did_not_play == False) & d.minutes.notna()]
+    by = {int(g): grp for g, grp in act.groupby('game_id')}
+    out = []
+    for g in gids:
+        grp = by.get(int(g))
+        if grp is None: out.append([int(g), None, [], []]); continue
+        sides = {}
+        for side, name in (('home', 'home'), ('away', 'away')):
+            rows = grp[grp.home_away == side].sort_values(['starter', 'minutes'], ascending=[False, False])
+            sides[name] = [[int(r.athlete_id), int(r.minutes), int(r.points), int(r.rebounds), int(r.assists), int(r.steals), int(r.blocks), int(r.turnovers), int(r.fouls),
+                            int(r.field_goals_made), int(r.field_goals_attempted), int(r.three_point_field_goals_made), int(r.three_point_field_goals_attempted),
+                            int(r.free_throws_made), int(r.free_throws_attempted), int(r.offensive_rebounds), (pm.get(str(g), {}).get(str(int(r.athlete_id)), pm.get(str(g), {}).get(int(r.athlete_id)))), 1 if r.starter else 0] for r in rows.itertuples()]
+        out.append([int(g), flows.get(str(g)), sides['home'], sides['away']])
+    return out
+
+def remaining_games(raw, y):
+    """Every regular-season game still to be played, as [date, away, home]."""
+    sch = readp(fetch(raw, 'sched', y))
+    sch = sch[sch.season_type == 2].copy() if 'season_type' in sch.columns else sch.copy()
+    sch['et'] = pd.to_datetime(sch['start_date'], utc=True).dt.tz_convert('America/New_York'); sch['edate'] = sch.et.dt.strftime('%Y-%m-%d')
+    done = sch[sch.status_type_completed == True]; last = done.edate.max() if len(done) else ''
+    todo = sch[(sch.status_type_completed != True) & (sch.edate > last) & sch.home_abbreviation.isin(STD) & sch.away_abbreviation.isin(STD)].sort_values(['edate', 'id'])
+    return [[r.edate, r.away_abbreviation, r.home_abbreviation] for r in todo.itertuples()]
+
+# ----------------------------------------------------------------------------- season tracker: each award's ladder at every game date so far
+def award_snapshots(raw, y, d, cup_id, shot, leaders, awards, defmodel, top_n=8):
+    """Replays the season day by day: after each game date, every award ladder is recomputed from the games played so far, with the same
+    rules the page uses that day (including the games-played eligibility rule, which is why early dates can have few names)."""
+    import awards_models
+    act = d[(d.did_not_play == False) & d.minutes.notna()].copy(); act['dt'] = act.game_date.astype(str)
+    dates = sorted(act.dt.unique()); cur = str(y)
+    plays = clutch_plays(raw, y, cup_id); plays['dt'] = plays.game_date.astype(str)
+    M = awards_models.Models(shot, leaders, {}, awards, defmodel)
+    fit = leaders.get('mipfit') or M.mip_fit()
+    out = {'dates': dates, 'awards': {a: [] for a in ('mvp', 'dpoy', 'roy', 'smoy', 'mip', 'clutch')}}
+    for D in dates:
+        cut = act[act.dt <= D]
+        tg = {k: int(v) for k, v in cut.groupby('team_abbreviation').game_id.nunique().items()}
+        g = cut.groupby('athlete_id'); a = g[COLS].sum().astype(float); a['gp'] = g.game_id.nunique()
+        a['gst'] = cut[cut.starter == True].groupby('athlete_id').game_id.nunique().reindex(a.index).fillna(0).astype(int)
+        last = g.tail(1).set_index('athlete_id'); a['name'] = last.athlete_display_name; a['team'] = last.team_abbreviation
+        players = [[int(pid), r['name'], r['team'], int(r['gp'])] + [float(r[c]) for c in COLS] + [int(r['gst'])] for pid, r in a.iterrows()]
+        M.SEAS[cur] = {'players': [dict(zip(awards_models.F, p)) for p in players], 'tg': tg, 'maxg': int(max(tg.values()))}
+        games = cut.drop_duplicates(['game_id', 'team_abbreviation'])
+        M.STAND[cur] = {t: {'w': int(x.team_winner.sum()), 'l': int((~x.team_winner.astype(bool)).sum())} for t, x in games.groupby('team_abbreviation')}
+        M.TEAMS[cur] = team_ratings(d[d.game_date.astype(str) <= D]); M.TD[cur] = M._tdef(cur)
+        crow = clutch_sum(plays[plays.dt <= D])
+        pick = lambda lst: [[r['p']['pid'], round(r['score'], 2)] for r in lst[:top_n]]
+        out['awards']['mvp'].append(pick(M.mvp(cur, True))); out['awards']['dpoy'].append(pick(M.dpoy(cur, False))); out['awards']['roy'].append(pick(M.roy(cur)))
+        out['awards']['smoy'].append(pick(M.smoy(cur, True))); out['awards']['mip'].append(pick(M.mip(cur, fit, True))); out['awards']['clutch'].append(pick(M.clutch(cur, crow)))
+    return out
 
 # ----------------------------------------------------------------------------- MVP race: the MVP ladder re-run after every game date this season
 GS_FIELDS = ['points','field_goals_made','field_goals_attempted','free_throws_made','free_throws_attempted','offensive_rebounds','defensive_rebounds','steals','assists','blocks','fouls','turnovers']
@@ -337,11 +580,11 @@ def mvp_race(d, hist_players, hist_stand, top_n=8):
 
 # ----------------------------------------------------------------------------- scores and schedule
 def games_table(raw, y, horizon_days=14):
-    sch = pd.read_parquet(fetch(raw, 'sched', y))
+    sch = readp(fetch(raw, 'sched', y))
     sch = sch[sch.season_type == 2].copy() if 'season_type' in sch.columns else sch.copy()
     sch['start'] = pd.to_datetime(sch['start_date'], utc=True); sch['et'] = sch.start.dt.tz_convert('America/New_York')
     sch['edate'] = sch.et.dt.strftime('%Y-%m-%d'); sch['etime'] = sch.et.dt.strftime('%-I:%M %p ET')
-    box = pd.read_parquet(fetch(raw, 'box', y)); box = box[(box.did_not_play == False) & box.minutes.notna()]
+    box = readp(fetch(raw, 'box', y)); box = box[(box.did_not_play == False) & box.minutes.notna()]
     top = box.sort_values(['points', 'minutes'], ascending=[False, True]).drop_duplicates('game_id').set_index('game_id')
     done = sch[sch.status_type_completed == True]
     last = done.edate.max() if len(done) else None
@@ -356,7 +599,7 @@ def games_table(raw, y, horizon_days=14):
         rows.append([r.edate, r.etime, r.away_abbreviation, r.home_abbreviation, 1 if comp else 0, int(r.away_score) if comp else None, int(r.home_score) if comp else None,
                      1 if (comp and int(r.status_period) > 4) else 0, 1 if 'Cup Championship' in str(r.notes_headline or '') else 0,
                      (t.athlete_display_name if t is not None else None), (t.team_abbreviation if t is not None else None), (int(t.points) if t is not None else None),
-                     int(t.athlete_id) if t is not None else None])
+                     int(t.athlete_id) if t is not None else None, int(r.id)])
     return rows
 
 # ----------------------------------------------------------------------------- assemble the data blocks and the page
@@ -378,14 +621,22 @@ def team_colors(d):
 def build_blocks(raw, refresh_current=True):
     cups = {y: cup_game_id(raw, y) for y in SEASONS}
     print('cup championship games:', cups, file=sys.stderr)
-    names = {}; seasons = {}; hist = {}; teams = {}; clutch = {}; tgames = {}; cur = None; cur_d = None
+    names = {}; seasons = {}; hist = {}; teams = {}; clutch = {}; tgames = {}; onoff = {}; lineups = {}; pairs = {}; lcov = {}; cur = None; cur_d = None; gbox = None; gx = None
     for y in SEASONS:
         k = str(y)
         seasons[k] = build_season(raw, y, names, cups[y])
         L, d = box_players(raw, y, cups[y])
         tgames[k] = team_games(raw, y, d, seasons[k].pop('_grp'))
+        gids = tgames[k].pop('_gids'); shot_gid = seasons[k].pop('_gid')
+        ld = lineup_data(raw, y, cups[y], d, keep_games=(y == CURRENT))
+        onoff[k] = ld['onoff']; lineups[k] = ld['lineups']; pairs[k] = ld['pairs']; lcov[k] = ld['coverage']
+        if y == CURRENT:
+            gbox = game_boxes(d, gids, ld.get('pm', {}), flows_data(raw, y, cups[y]))
+            order = {int(g): i for i, g in enumerate(gids)}
+            gx = np.array([order.get(int(g), 65535) if g >= 0 else 65535 for g in shot_gid], dtype='<u2')
+            seasons[k]['gx'] = base64.b64encode(gx.tobytes()).decode(); tgames[k]['gids'] = [int(g) for g in gids]
         teams[k] = team_ratings(d); clutch[k] = clutch_rows(raw, y, cups[y])
-        if y == CURRENT: cur, cur_d = L, d
+        if y == CURRENT: cur, cur_d = L, d; globals()['_CUR_D'] = d; globals()['_CUR_CUP'] = cups[y]
         else: hist[k] = L
     static = os.path.join(HERE, 'static')
     roster = json.load(open(os.path.join(static, 'roster.json')))
@@ -399,9 +650,39 @@ def build_blocks(raw, refresh_current=True):
     hp = {k: hist[k]['players'] for k in hist}; hs = {k: seasons[k]['stand'] for k in hist}
     leaders = {'key': str(CURRENT), 'asof': cur['asof'], 'games': cur['games'], 'maxg': cur['maxg'], 'tg': cur['tg'], 'players': cur['players'],
                'hist': hist, 'mem': {'record': record, 'coach': roster['coach'], 'roster': roster['roster'], 'rosterAsOf': roster['rosterAsOf']},
-               'teams': teams, 'tgames': tgames, 'tcolors': team_colors(cur_d), 'clutch': clutch, 'race': mvp_race(cur_d, hp, hs), 'sched': games_table(raw, CURRENT)}
+               'teams': teams, 'tgames': tgames, 'tcolors': team_colors(cur_d), 'onoff': onoff, 'lineups': lineups, 'pairs': pairs, 'lcov': lcov, 'gbox': gbox, 'remaining': remaining_games(raw, CURRENT), 'builtAt': BUILT_AT, 'clutch': clutch, 'race': mvp_race(cur_d, hp, hs), 'sched': games_table(raw, CURRENT)}
     shot = {'names': {str(k): v for k, v in names.items()}, 'seasons': seasons}
     return shot, leaders
+
+# ----------------------------------------------------------------------------- archived seasons (one file each, loaded by the page on demand)
+ARCHIVE_VERSION = 2
+def season_payload(raw, y):
+    """Everything the page needs for one finished season, as one JSON-ready object. Cached in raw/ because finished seasons never change."""
+    cache = os.path.join(raw, f'season{y}.json')
+    if os.path.exists(cache):
+        c = json.load(open(cache))
+        if c.get('v') == ARCHIVE_VERSION: return c['data']
+    cup = cup_game_id(raw, y); names = {}
+    s = build_season(raw, y, names, cup); L, d = box_players(raw, y, cup)
+    tg = team_games(raw, y, d, s.pop('_grp')); tg.pop('_gids', None); s.pop('_gid', None)
+    ld = lineup_data(raw, y, cup, d)
+    data = {'key': str(y), 'shot': s, 'names': {str(k): v for k, v in names.items()}, 'hist': L, 'teams': team_ratings(d), 'tgames': tg,
+            'onoff': ld['onoff'], 'lineups': ld['lineups'], 'pairs': ld['pairs'], 'lcov': ld['coverage']}
+    json.dump({'v': ARCHIVE_VERSION, 'data': data}, open(cache, 'w'), separators=(',', ':'))
+    return data
+
+def build_archive(raw, first_year, out_dir, url_of):
+    """Writes season-<year>.json for every finished season from first_year up to the oldest embedded one, and returns the manifest for the page."""
+    os.makedirs(out_dir, exist_ok=True); manifest = {}
+    for y in range(first_year, SEASONS[0]):
+        p = season_payload(raw, y); path = os.path.join(out_dir, f'season-{y}.json')
+        json.dump(p, open(path, 'w'), separators=(',', ':'))
+        sch = readp(fetch(raw, 'sched', y)); scheduled = int((sch.season_type == 2).sum()) if 'season_type' in sch.columns else len(sch)
+        bg = p['hist']['games']; lc = p['lcov']
+        manifest[str(y)] = {'label': p['shot']['label'], 'games': p['shot']['games'], 'boxGames': bg, 'scheduled': scheduled, 'lineups': round(lc[0] / lc[1], 3) if lc[1] else 0,
+                            'url': url_of(y), 'bytes': os.path.getsize(path), 'partial': bool(bg < 0.9 * scheduled)}
+        print(f'archive {y}: box scores for {bg} of {scheduled} games, lineups {lc[0]}/{lc[1]}, {os.path.getsize(path)/1e6:.2f} MB', file=sys.stderr)
+    return manifest
 
 def assemble(template_path, shot, leaders, awards, out_path):
     t = open(template_path, encoding='utf-8').read()
@@ -418,16 +699,36 @@ def main():
     ap.add_argument('--out', default='docs/index.html')
     ap.add_argument('--data-only', default=None, help='write the two data blocks as JSON files into this folder instead of the page')
     ap.add_argument('--template', default=os.path.join(HERE, 'template.html'))
+    ap.add_argument('--built-at', default=None, help='timestamp to record in the page (defaults to now, in UTC); fixed for reproducible test builds')
     ap.add_argument('--no-refresh', action='store_true', help='do not re-download the season in progress (for testing)')
+    ap.add_argument('--history', type=int, default=None, help='also build one data file per finished season back to this end-year (2004 = 2003-04), for the page to load on demand')
+    ap.add_argument('--archive-dir', default=None, help='where the season files go (default: a data/ folder beside the page)')
+    ap.add_argument('--archive-urls', default=None, help='JSON file mapping end-year to the URL the page should fetch, when the files are hosted elsewhere (default: data/season-<year>.json beside the page)')
     ap.add_argument('--current', type=int, default=None, help='year the current season ends (2027 = 2026-27); the five most recent seasons are built')
     a = ap.parse_args()
-    global CURRENT, SEASONS
+    global CURRENT, SEASONS, BUILT_AT
+    BUILT_AT = a.built_at or dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     if a.current:
         CURRENT = a.current; SEASONS = list(range(CURRENT - 4, CURRENT + 1))
     if not a.no_refresh:
         for kind in ('pbp', 'box', 'sched'): fetch(a.raw, kind, CURRENT, refresh=True)
     shot, leaders = build_blocks(a.raw)
     awards = json.load(open(os.path.join(HERE, 'static', 'awards.json')))
+    if a.history:
+        out_dir = a.archive_dir or os.path.join(os.path.dirname(os.path.abspath(a.out)), 'data')
+        urls = json.load(open(a.archive_urls)) if a.archive_urls else {}
+        shot['archive'] = build_archive(a.raw, a.history, out_dir, lambda y: urls.get(str(y), f'data/season-{y}.json'))
+        # the award models over every finished season: the Most Improved regression and the scorecard on the About tab
+        import awards_models
+        payloads = {str(y): season_payload(a.raw, y) for y in range(a.history, SEASONS[0])}
+        M = awards_models.Models(shot, leaders, payloads, awards, json.load(open(os.path.join(HERE, 'static', 'defmodel.json'))))
+        leaders['mipfit'] = M.mip_fit(); leaders['backtest'] = M.backtest(leaders['mipfit'])
+        print(f"Most Improved regression on {leaders['mipfit']['seasons']} seasons: {leaders['mipfit']['a']:+.3f} {leaders['mipfit']['b']:+.4f} x last-year Game Score; scorecard rows: {len(leaders['backtest'])}", file=sys.stderr)
+    try:
+        leaders['snapshots'] = award_snapshots(a.raw, CURRENT, _CUR_D, _CUR_CUP, shot, leaders, awards, json.load(open(os.path.join(HERE, 'static', 'defmodel.json'))))
+        print(f"season tracker: {len(leaders['snapshots']['dates'])} game dates", file=sys.stderr)
+    except Exception as e:
+        print('season tracker could not be built:', e, file=sys.stderr); leaders['snapshots'] = None
     if a.data_only:
         os.makedirs(a.data_only, exist_ok=True)
         json.dump(shot, open(os.path.join(a.data_only, 'shot.json'), 'w'), separators=(',', ':')); json.dump(leaders, open(os.path.join(a.data_only, 'leaders.json'), 'w'), separators=(',', ':'))
