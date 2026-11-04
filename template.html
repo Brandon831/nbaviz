@@ -165,7 +165,7 @@ tbody tr.zero td{color:var(--muted)}
 
 [hidden]{display:none!important}
 .tabs{display:flex;gap:6px;margin:0 0 20px;border-bottom:1px solid var(--rule)}
-.tabs button{font:600 18px var(--head);letter-spacing:.01em;padding:10px 16px 9px;background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+.tabs button{font:600 15px var(--head);letter-spacing:.01em;padding:8px 10px 7px;background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);cursor:pointer;margin-bottom:-1px}
 .tabs button:hover{color:var(--ink)}
 .tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--hot)}
 .tabs button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px;border-radius:4px}
@@ -355,10 +355,11 @@ canvas:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-ra
 .sl input[type=range]{width:100%;accent-color:var(--cold)}
 @media (max-width:1100px){.glance{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:640px){.glance{grid-template-columns:repeat(2,minmax(0,1fr))}.sliders{grid-template-columns:minmax(0,1fr)}}
-.tabs{overflow-x:auto;scrollbar-width:thin}
+.tabs{flex-wrap:wrap;overflow:visible;gap:4px;row-gap:0}
 .tabs button{white-space:nowrap}
 .tabs .ts{display:none}
-@media (max-width:520px){.tabs .tl{display:none}.tabs .ts{display:inline}.tabs button{padding:10px 8px;font-size:15px}}
+@media (max-width:1100px){.tabs .tl{display:none}.tabs .ts{display:inline}}
+@media (max-width:520px){.tabs button{padding:8px 7px 7px;font-size:14px}}
 
 /* ----- scores & teams tab ----- */
 .scoresec,.standsec,.ratesec,.defsec{padding:14px 14px 12px;margin-bottom:16px}
@@ -521,7 +522,9 @@ tr.rowlink{cursor:pointer} tr.rowlink:hover{background:var(--chip)}
 .about dd{margin:0;color:var(--muted)}
 ul.about{padding-left:20px} ul.about li{margin:6px 0}
 .warn{color:var(--hot);font-weight:600}
-.gm-tag.b2b{background:color-mix(in srgb,var(--gold) 22%,transparent)}
+.b2b{font-size:.78em;color:var(--muted);text-decoration:none;font-weight:500;margin-left:2px}
+.gm-t .tm{white-space:nowrap;min-width:0}
+.gm-t.up{display:block;white-space:normal}
 li.game[data-gid]{cursor:pointer}
 li.game[data-gid]:hover{background:var(--chip)}
 .gm-more{margin-left:auto;font-size:12.5px;color:var(--muted);white-space:nowrap}
@@ -537,6 +540,22 @@ li.game[data-gid]:hover{background:var(--chip)}
 #tr-svg{display:block;width:100%;height:auto}
 .trline{transition:stroke-opacity .15s}
 .trdot{cursor:pointer}
+
+/* award panels and glance tiles tinted with the leader's team color */
+.card.mvp{border-left:5px solid var(--tc,var(--aw-bd));background:linear-gradient(135deg,color-mix(in srgb,var(--tc,var(--aw-g1)) 16%,var(--surface)) 0%,var(--surface) 62%)}
+.gl{border-left:4px solid var(--tc,var(--rule))}
+/* scoreboard */
+.tdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;vertical-align:baseline;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 18%,transparent)}
+li.game{border-left:4px solid transparent;padding-left:10px;border-radius:0 8px 8px 0}
+li.game.done{border-left-color:var(--wc,transparent);background:linear-gradient(90deg,color-mix(in srgb,var(--wc,transparent) 9%,transparent),transparent 45%)}
+.gm-t b{font:700 22px/1.1 var(--head)}
+.gm-t.win .tm{font-weight:700}
+.gm-t:not(.win) .tm{opacity:.78}
+
+.lubar{margin:0 0 10px}
+table thead th{cursor:pointer;user-select:none}
+th[aria-sort=ascending]::after{content:" \25B2";font-size:.75em;color:var(--muted)} th[aria-sort=descending]::after{content:" \25BC";font-size:.75em;color:var(--muted)}
+.xlink{font-weight:600}
 
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
@@ -782,6 +801,11 @@ function decode16(b64){
   for (var i=0;i<n;i++) bytes[i] = bin.charCodeAt(i);
   return new Uint16Array(bytes.buffer);
 }
+/* the favorite team: Memphis unless the person picked another one (kept in this browser only) */
+var AVG_PID = 99999999;   /* Armando “NBA” Venegas, the league's average player: shown and comparable like anyone, but never part of league baselines or award ladders */
+window.NBA_AVG_PID = AVG_PID;
+window.NBA_FAV = (function(){ try { var v = localStorage.getItem('nba-fav'); if (v && /^[A-Z]{2,4}$/.test(v)) return v; } catch (e) {} return 'MEM'; })();
+window.NBA_SET_FAV = function(t){ try { localStorage.setItem('nba-fav', t); } catch (e) {} };
 /* ---------- the archive: older seasons kept in separate files and fetched when first picked ---------- */
 var ARCH = window.NBA_ARCHIVE = (function(){
   var man = D.archive || {}, loaded = {}, data = {}, promises = {}, hooks = [];
@@ -933,7 +957,7 @@ function tally(keys, pid, type, f, shots){
   }
   keys.forEach(function(k){
     var Sx = SEASONS[k], arr = Sx.arr, ex = Sx.ex, list, sr = SRANK[k]*256;
-    if (pid==null) list = Sx.players; else { var o = Sx.idx.get(pid); list = o ? [o] : []; }
+    if (pid==null) list = Sx.players.filter(function(p){ return p.pid !== AVG_PID; }); else { var o = Sx.idx.get(pid); list = o ? [o] : []; }
     list.forEach(function(p){
       var ab = slice(Sx, p);
       for (var i=ab[0];i<ab[1];i++){
@@ -1756,7 +1780,7 @@ function objs(arr){ return arr.map(function(a){ var o = {}; F.forEach(function(k
 var SD = {};
 SD[L.key || '2027'] = {players:P, tg:L.tg, maxg:L.maxg, asof:L.asof};
 Object.keys(L.hist || {}).forEach(function(k){ var s = L.hist[k]; SD[k] = {players:objs(s.players), tg:s.tg, maxg:s.maxg, asof:s.asof}; });
-function minGamesFor(S,p){ return Math.max(1, Math.ceil(0.7 * (S.tg[p.team] || S.maxg))); }
+function minGamesFor(S,p){ return p.pid === window.NBA_AVG_PID ? 1e9 : Math.max(1, Math.ceil(0.7 * (S.tg[p.team] || S.maxg))); }
 function needFor(S,c){ return Math.max(1, Math.ceil(c.need * S.maxg / 82)); }
 /* an entry is {p, num, den}; value = num/den, compared exactly by cross-multiplying */
 function entriesFor(c, S, md){
@@ -1806,7 +1830,7 @@ function render(){
       else if (mode === 'pg'){ val = v.toFixed(1); meta = p.team+' \u00B7 '+p.gp+' GP'; }
       else { val = fmtInt(v); meta = p.team+' \u00B7 '+p.gp+' GP'; }
       var w = best>0 ? Math.max(4, 100*v/best) : 0;
-      html += '<li class="lrow'+(p.team==='MEM'?' mem':'')+'"><span class="bar" style="width:'+w.toFixed(1)+'%"></span>'+
+      html += '<li class="lrow'+(p.team===window.NBA_FAV?' mem':'')+'"><span class="bar" style="width:'+w.toFixed(1)+'%"></span>'+
         '<span class="rk">'+(tied?'T-':'')+rank+'</span>'+
         '<span><div class="nm" data-pid="'+p.pid+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(p.name)+'</div><div class="meta">'+esc(meta)+'</div></span>'+
         '<span class="v">'+val+'</span></li>';
@@ -1868,13 +1892,13 @@ try { AWD = JSON.parse(document.getElementById('awards-data').textContent) || {}
 var SEAS_KEYS = Object.keys(SD).sort();
 var CUR = L.key || '2027';
 var MV = {K:10, KT:15, BETA:0.2, HW:[5,3,2], GCAP:60};
-var DEFM = {"cols": ["blk", "stl", "dreb", "mpg", "tdef"], "mu": [0.5587597905935625, 0.9186727034058602, 3.8577685076090176, 28.996832547779064, 0.12793391409123347], "sd": [0.5199511471018817, 0.38404433437114804, 1.7821840323279285, 5.196499224884956, 2.972980607742158], "w": [0.7931690661491202, 1.0374340140889164, 0.2722576025867873, 0.2606823691412689, 1.2042633847426458]};   // fitted offline on the real All-Defensive teams of 2003-04 to 2025-26 (static/defmodel.json)
+var DEFM = {"cols": ["blk", "stl", "dreb", "mpg", "tdef", "rep"], "mu": [0.5587597905935625, 0.9186727034058602, 3.8577685076090176, 28.996832547779064, 0.12793391409123347, 0.06948640483383686], "sd": [0.5199511471018817, 0.38404433437114804, 1.7821840323279285, 5.196499224884956, 2.972980607742158, 0.25427946117826244], "w": [0.7654712361589479, 0.9173371868167918, 0.10435219430805237, 0.2607153899394848, 1.1980806016751937, 0.6965836673007703]}, DEFM_STATS = {"cols": ["blk", "stl", "dreb", "mpg", "tdef"], "mu": [0.5587597905935625, 0.9186727034058602, 3.8577685076090176, 28.996832547779064, 0.12793391409123347], "sd": [0.5199511471018817, 0.38404433437114804, 1.7821840323279285, 5.196499224884956, 2.972980607742158], "w": [0.7931690661491202, 1.0374340140889164, 0.2722576025867873, 0.2606823691412689, 1.2042633847426458]}, DEFM_RIM = {"cols": ["blk", "stl", "dreb", "mpg", "tdef", "rimds", "rimdfg"], "mu": [0.5425693223668828, 0.9069554997581005, 3.9677247669650257, 28.398127236730137, 0.19593862997995373, -0.0006099773291599883, -0.0012947314180549434], "sd": [0.4506449958188432, 0.3449822008210549, 1.809595687162661, 4.6717633695717815, 2.804242089214724, 0.016846474815863717, 0.022477496593410872], "w": [0.7374963368525292, 0.9635970042643648, 0.16486288094387108, 0.22397583116778128, 0.974400204701206, 0.5630329442352688, 0.3132256055603518]}, defRep = true;   // fitted offline on the real All-Defensive teams of 2003-04 to 2025-26 (static/defmodel.json)
 var basis = {mvp:true, dpoy:false, smoy:true};   // true = blend with past seasons, false = this season only
 function gameScore(p){
   return p.pts + 0.4*p.fgm - 0.7*p.fga - 0.4*(p.fta - p.ftm) + 0.7*p.oreb + 0.3*p.dreb + p.stl + 0.7*p.ast + 0.7*p.blk - 0.4*p.pf - p.tov;
 }
 function standOf(key, team){ var st = window.NBA_STANDINGS && window.NBA_STANDINGS[key]; return st && st[team] ? st[team] : null; }
-function gpOk(p, S){ return p.gp >= Math.max(1, Math.ceil(0.7 * (S.tg[p.team] || S.maxg))); }
+function gpOk(p, S){ return p.pid !== window.NBA_AVG_PID && p.gp >= Math.max(1, Math.ceil(0.7 * (S.tg[p.team] || S.maxg))); }
 function prevKeys(key){ var i = SEAS_KEYS.indexOf(key); return SEAS_KEYS.slice(Math.max(0, i-3), i).reverse(); }   // most recent first
 function seasonLabel(k){ return (+k - 1) + '-' + String(k).slice(2); }
 function teamT(key, team, blend){
@@ -1935,10 +1959,21 @@ function drtgRank(key, team){
   Object.keys(t).forEach(function(tm){ if (t[tm][0] < mine) r++; });
   return r;
 }
+function pastAllDef(key, pid){
+  for (var j = 1; j <= 3; j++){ var rows = AWD[String(+key - j)] || []; for (var i = 0; i < rows.length; i++) if (rows[i][0] === pid && (rows[i][1] === 'ad1' || rows[i][1] === 'ad2')) return 1; }
+  return 0;
+}
+/* rim deterrence from the rebuilt lineups: how much opponents' rim-attempt share and rim FG% fall when the player is on the floor, shrunk by minutes */
+function rimFeats(key, pid){
+  var o = (L.onoff && L.onoff[key]) ? L.onoff[key][String(pid)] : null; if (!o || o.length < 17 || o[11] < 50 || o[14] < 50) return [0, 0];
+  var w = o[1] / (o[1] + 500 * 60); return [(o[15] / o[14] - o[12] / o[11]) * w, ((o[16] / Math.max(o[15], 1)) - (o[13] / Math.max(o[12], 1))) * w];
+}
+function hasRim(key){ var oo = L.onoff && L.onoff[key]; if (!oo) return false; for (var k in oo){ return oo[k].length >= 17; } return false; }
 function dscore(key, p){
   var td = tdefMap(key)[p.team]; if (td === undefined) td = 0;
-  var x = [p.blk / p.gp, p.stl / p.gp, p.dreb / p.gp, p.min / p.gp, td], s = 0;
-  for (var i = 0; i < x.length; i++) s += DEFM.w[i] * (x[i] - DEFM.mu[i]) / DEFM.sd[i];
+  var rim = !defRep && hasRim(key), M = defRep ? DEFM : (rim ? DEFM_RIM : DEFM_STATS), x = [p.blk / p.gp, p.stl / p.gp, p.dreb / p.gp, p.min / p.gp, td], s = 0;
+  if (defRep) x.push(pastAllDef(key, p.pid)); else if (rim) x = x.concat(rimFeats(key, p.pid));
+  for (var i = 0; i < x.length; i++) s += M.w[i] * (x[i] - M.mu[i]) / M.sd[i];
   return s;
 }
 function dpoyFor(key, blend){
@@ -1951,7 +1986,13 @@ function dpoyFor(key, blend){
   });
   return sortOut(out);
 }
-function allDefFor(key, blend){ return dpoyFor(key, blend).slice(0, 10); }
+/* two guards, two forwards and a center per team through 2022-23 (the voting rule then); the ten best regardless of position from 2023-24 */
+function allDefFor(key, blend){
+  var lst = dpoyFor(key, blend); if (+key > 2023) return lst.slice(0, 10);
+  var src = key === L.key ? L : (L.hist[key] || {}), pos = src.pos || {}, teams = [{G:2, F:2, C:1}, {G:2, F:2, C:1}], out = [[], []];
+  for (var i = 0; i < lst.length && out[0].length + out[1].length < 10; i++){ var g = pos[String(lst[i].p.pid)] || 'F'; for (var t = 0; t < 2; t++) if (teams[t][g] > 0){ out[t].push(lst[i]); teams[t][g]--; break; } }
+  return out[0].concat(out[1]);
+}
 /* the real All-Rookie teams include rookies below the 65-game bar, so the games requirement is lower: half of team games */
 function allRookieFor(key){ return royFor(key, true, 0.5).slice(0, 10); }
 
@@ -2042,6 +2083,8 @@ var mvpCfg = {beta: MV.BETA, K: MV.K, minmpg: 25};
 function mvpIsDefault(){ return mvpCfg.beta === MV.BETA && mvpCfg.K === MV.K && mvpCfg.minmpg === 25; }
 function mvpActive(){ return mvpIsDefault() ? undefined : mvpCfg; }
 var RACE_COLORS = ['var(--hot)', 'var(--cold)', 'var(--freq)', 'var(--gold)', 'var(--muted)'];
+function teamColor(team){ var c = L.tcolors && L.tcolors[team]; return c && /^[0-9a-f]{6}$/i.test(c[0]) ? '#'+c[0] : null; }
+function raceColor(pid){ var p = BYID[+pid] || BYID[pid]; return p ? teamColor(p.team) : null; }
 function shortDate(iso){ return new Date(iso+'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'}); }
 function renderRace(){
   var el = document.getElementById('mvp-race'); if (!el) return;
@@ -2068,7 +2111,7 @@ function renderRace(){
   R.dates.forEach(function(d, i){ if (i % step === 0 || i === n - 1) svg += '<text x="'+X(i).toFixed(1)+'" y="'+(H-10)+'" text-anchor="middle" style="fill:var(--muted)" font-size="11">'+shortDate(d)+'</text>'; });
   var ends = [];
   rows.forEach(function(r, k){
-    var col = RACE_COLORS[k], pts = [], dots = '';
+    var col = raceColor(r.pid) || RACE_COLORS[k], pts = [], dots = ''; r.col = col;
     r.a.forEach(function(v, i){
       if (v === null || v === undefined) return;
       pts.push(X(i).toFixed(1)+','+Y(v).toFixed(1));
@@ -2082,7 +2125,7 @@ function renderRace(){
   for (var j=1;j<ends.length;j++) if (ends[j].y - ends[j-1].y < 14) ends[j].y = ends[j-1].y + 14;
   ends.forEach(function(e){
     var parts = String(e.name).split(' '), short = parts.length > 1 ? parts[parts.length-1] : parts[0];
-    svg += '<text x="'+(W-mr+8)+'" y="'+(e.y+4).toFixed(1)+'" font-size="12.5" font-weight="600" style="fill:'+RACE_COLORS[e.k]+'">'+esc(short)+' '+e.val.toFixed(1)+'</text>';
+    svg += '<text x="'+(W-mr+8)+'" y="'+(e.y+4).toFixed(1)+'" font-size="12.5" font-weight="700" class="plbl" style="fill:'+(rows[e.k].col || RACE_COLORS[e.k])+'">'+esc(short)+' '+e.val.toFixed(1)+'</text>';
   });
   svg += '</svg>';
   el.innerHTML = '<h3>The race so far</h3><p class="smn">The five leading MVP scores after each game date, recalculated with only the games played by then. '+
@@ -2100,12 +2143,13 @@ function renderGlance(){
   ];
   var html = '';
   defs.forEach(function(d){
-    var a = d.list[0], b = d.list[1];
-    if (!a){ html += '<div class="gl"><button type="button" class="glgo" data-go="'+d.id+'">'+d.t+'</button><span class="gn">No eligible players yet</span></div>'; return; }
+    var a = d.list[0], b = d.list[1], panel = document.getElementById(d.id), tc = a ? teamColor(a.p.team) : null;
+    if (panel){ if (tc) panel.style.setProperty('--tc', tc); else panel.style.removeProperty('--tc'); }
+    if (!a){ html += '<div class="gl" style="--tc:transparent"><button type="button" class="glgo" data-go="'+d.id+'">'+d.t+'</button><span class="gn">No eligible players yet</span></div>'; return; }
     var gap = b ? a.score - b.score : null, rel = b ? Math.abs(gap) / Math.max(Math.abs(a.score), 1e-9) : 1;
     var tag = rel < 0.03 ? ['close', 'Too close to call'] : rel < 0.10 ? ['narrow', 'Narrow lead'] : ['clear', 'Clear lead'];
     var shown = d.id === 'mip' ? sgn(a.score) : a.score.toFixed(1);
-    html += '<div class="gl"><button type="button" class="glgo" data-go="'+d.id+'" title="Jump to this ladder">'+d.t+'</button>'+
+    html += '<div class="gl" style="--tc:'+(tc || 'transparent')+'"><button type="button" class="glgo" data-go="'+d.id+'" title="Jump to this ladder">'+d.t+'</button>'+
       '<span class="gn" data-pid="'+a.p.pid+'" role="link" tabindex="0">'+esc(a.p.name)+'</span><span class="gs">'+shown+' <small>'+esc(a.p.team)+'</small></span>'+
       (b ? '<span class="gg">'+(gap >= 0.05 ? '+'+gap.toFixed(1) : 'level with')+' over '+esc(b.p.name)+'</span>' : '')+
       '<span class="gtag t-'+tag[0]+'" title="The lead as a share of the leader\u2019s score: under 3% is too close to call, under 10% is narrow">'+tag[1]+'</span></div>';
@@ -2151,7 +2195,7 @@ function honorsFor(key, pid){
 function recOf(key, team){ var st = standOf(key, team); return st ? st.w + '-' + st.l : ''; }
 function stats(pairs){ return pairs.map(function(a){ return '<span class="st"><b>'+a[0]+'</b><span class="u">'+a[1]+'</span></span> '; }).join(''); }
 function rowHtml(o){
-  return '<li class="mrow'+(o.p.team==='MEM'?' mem':'')+'"><span class="bar" style="width:'+o.pct.toFixed(1)+'%"></span>'+
+  return '<li class="mrow'+(o.p.team===window.NBA_FAV?' mem':'')+'"><span class="bar" style="width:'+o.pct.toFixed(1)+'%"></span>'+
     '<span class="mrk r'+o.rk+'">'+o.rk+'</span>'+
     '<span class="mwho"><div class="mname" data-pid="'+o.p.pid+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(o.p.name)+'</div><div class="mteam">'+esc(o.p.team)+(o.rec ? ' \u00B7 '+o.rec : '')+'</div>'+
       (o.hon && o.hon.length ? '<span class="mhon" title="Honors from the last finished season">'+esc(o.honLabel)+': '+esc(o.hon.join(' \u00B7 '))+'</span>' : '')+'</span>'+
@@ -2234,7 +2278,7 @@ function renderMip(){
     var p = r.p, c = r.c, b = r.b, rk = i + 1, pct = Math.max(8, 100 * r.score / best), rec = recOf(CUR, p.team);
     var parts = 'Game Score '+c.gs.toFixed(1)+', up from '+b.gs.toFixed(1)+(mipRaw ? '' : ' (typical change at that level: '+sgn(r.exp)+')')+' \u00B7 '+c.mpg.toFixed(1)+' MPG ('+b.mpg.toFixed(1)+' last season) \u00B7 '+c.gp+' GP';
     function stat(v, last, lab){ var d = v - last; return '<span class="st"><b>'+v.toFixed(1)+'</b><span class="u">'+lab+'</span><span class="dl '+dcls(d)+'" title="Last season: '+last.toFixed(1)+'">'+sgn(d)+'</span></span> '; }
-    html += '<li class="mrow'+(p.team==='MEM'?' mem':'')+'"><span class="bar" style="width:'+pct.toFixed(1)+'%"></span>'+
+    html += '<li class="mrow'+(p.team===window.NBA_FAV?' mem':'')+'"><span class="bar" style="width:'+pct.toFixed(1)+'%"></span>'+
       '<span class="mrk r'+rk+'">'+rk+'</span>'+
       '<span class="mwho"><div class="mname" data-pid="'+p.pid+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(p.name)+'</div><div class="mteam">'+esc(p.team)+(rec ? ' \u00B7 '+rec : '')+'</div></span>'+
       '<span class="mline">'+stat(c.pts, b.pts, 'PTS')+stat(c.reb, b.reb, 'REB')+stat(c.ast, b.ast, 'AST')+'<span class="mparts">'+esc(parts)+'</span></span>'+
@@ -2250,7 +2294,7 @@ function teamSection(id, title, sub, groups, lineFn){
   groups.forEach(function(g, gi){
     html += '<div class="tcard"><h3><span class="mrk r'+(gi+1)+'">'+(gi+1)+'</span>'+g.label+'</h3><ol class="tl">';
     g.rows.forEach(function(r){
-      html += '<li class="trow'+(r.p.team==='MEM'?' mem':'')+'"><span class="tn" data-pid="'+r.p.pid+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(r.p.name)+'</span><span class="tt">'+esc(r.p.team)+'</span><span class="ts">'+lineFn(r)+'</span></li>';
+      html += '<li class="trow'+(r.p.team===window.NBA_FAV?' mem':'')+'"><span class="tn" data-pid="'+r.p.pid+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(r.p.name)+'</span><span class="tt">'+esc(r.p.team)+'</span><span class="ts">'+lineFn(r)+'</span></li>';
     });
     html += '</ol></div>';
   });
@@ -2320,7 +2364,7 @@ function howDpoy(){
   return '<p>This is a model, not a vote. Box scores cannot see most defense, so it leans on what they can: blocks, steals and defensive rebounds per game, minutes played, and how good the team\u2019s defense is (points allowed per 100 possessions against the league average). The weights were fitted to the real All-Defensive teams of the four finished seasons. Team defense and blocks count most, steals next, with minutes and defensive rebounds a small plus. This ladder starts on This season only, so it uses just this season\u2019s numbers; the Ranking basis switch in this panel\u2019s header can blend in the last three seasons the same way as the MVP ladder.</p>'+
     '<p><b>Who is eligible.</b> At least 70% of team games and 20 or more minutes a game.</p>'+
     '<p><b>How it has done.</b> The real Defensive Player of the Year among the eligible players, in each finished season, using that season\u2019s numbers alone:</p><ul>'+winnerLines('dpoy', function(k){ return dpoyFor(k, false); })+'</ul>'+
-    '<p>Those lines come from weights that were fitted on the same seasons. In a stricter test, each season was held out of the fitting and predicted from the other three; the model then found 22 of the 40 real All-Defensive players in its top 10 and ranked the real Defensive Player of the Year 1st, 2nd, 10th and 1st. That makes defense the weakest of these models: there is no on/off or matchup data here, players on elite defenses get a boost, and a rim protector on an average defense can be undersold. Early in the year, defensive averages and team defense rest on only a few games and swing a lot. In a rewind to game 5 of the last three finished seasons, blending in past seasons matched the final defensive ranking better than this season alone (0.71 against 0.53), although it did not reliably find the winner, so the switch is there if you want a steadier early-season list.</p>';
+    '<p>The weights were fitted on the real All-Defensive teams of 2003-04 to 2025-26 (static/defmodel.json). By default the model also counts <b>voting history</b>: whether a player made an All-Defensive team in any of the previous three seasons. Half of all selections are repeats, and in a test that held each season out of the fitting, adding it raised the share of real All-Defensive selections found from 51% to 59% and the Defensive Player of the Year ranked first from 10 to 13 of 23 seasons. It is a read on voters as much as on defense, which is why the switch above lets you see the statistics alone. The statistics-only ranking adds <b>rim deterrence</b> from the rebuilt lineups: how much less often opponents shoot at the rim, and how much worse they shoot there, when the player is on the floor than when he sits. In a held-out test over 2017-18 to 2025-26 that lifted the statistics-only model from 46 to 51 of 90 All-Defensive selections and the Defensive Player of the Year ranked first from 3 to 5 of 9 seasons; it adds nothing once voting history is counted. The All-Defensive teams below use the positional rule voters followed through 2022-23 (two guards, two forwards and a center per team) and are positionless from 2023-24.</p>';
 }
 function howRoy(){
   return '<p>This is a model, not a vote. A rookie here is a player with no earlier season in the data ('+seasonLabel(SEAS_KEYS[0])+' onward). Rookies are ranked on Game Score per game, the same box-score measure as the MVP ladder, because that alone has matched the real winners; they need 70% of team games and 15 or more minutes a game. Nobody has history to blend in, so this ladder has no basis switch.</p>'+
@@ -2360,7 +2404,7 @@ function buildAwards(){
   set('awpanels',
     '<div class="glance" id="glance" aria-label="Awards at a glance"></div>'+
     shell('mvp', 'MVP watch', '', basisCtl('mvp', basis.mvp), MVP_EXTRA) +
-    '<div class="agrid">'+shell('dpoy', 'Defensive Player of the Year', 'cmp', basisCtl('dpoy', basis.dpoy)) + shell('roy', 'Rookie of the Year', 'cmp') + shell('smoy', 'Sixth Man of the Year', 'cmp', basisCtl('smoy', basis.smoy, 'Blend team records')) + shell('clutch', 'Clutch Player of the Year', 'cmp')+'</div>'+
+    '<div class="agrid">'+shell('dpoy', 'Defensive Player of the Year', 'cmp', basisCtl('dpoy', basis.dpoy)+'<fieldset class="seg"><legend>Voting history</legend><div class="segbtns"><label><input type="radio" name="defrep" value="on" checked><span>Count past All-Defensive picks</span></label><label><input type="radio" name="defrep" value="off"><span>Statistics only</span></label></div></fieldset>') + shell('roy', 'Rookie of the Year', 'cmp') + shell('smoy', 'Sixth Man of the Year', 'cmp', basisCtl('smoy', basis.smoy, 'Blend team records')) + shell('clutch', 'Clutch Player of the Year', 'cmp')+'</div>'+
     shell('mip', 'Most Improved Player watch', 'mip', mipCtl) +
     '<div id="awteams"></div>');
   set('awlede', 'Top 5 candidates for each end-of-season award, plus projected All-NBA, All-Defensive and All-Rookie teams, all from stat models rather than votes. Each ladder that can blend in past seasons has its own Ranking basis switch. '+asofTxt()+' Finals MVP, Coach of the Year and Executive of the Year are not included: they depend on the playoffs or on coaching and front-office information this page does not track. Grizzlies players are shaded.', true);
@@ -2370,6 +2414,7 @@ function buildAwards(){
   });
   wireCustom();
   document.getElementById('glance').addEventListener('click', function(e){ var g = e.target.closest ? e.target.closest('[data-go]') : null; if (g){ var t = document.getElementById(g.getAttribute('data-go')); if (t) t.scrollIntoView({behavior:'smooth', block:'start'}); } });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name=defrep]'), function(el){ el.addEventListener('change', function(){ if (!el.checked) return; defRep = el.value === 'on'; renderDpoy(); renderTeams(); renderGlance(); }); });
   ['mvp','dpoy','smoy'].forEach(function(id){
     Array.prototype.forEach.call(document.querySelectorAll('input[name=basis-'+id+']'), function(el){
       el.addEventListener('change', function(){
@@ -2392,8 +2437,21 @@ function ageOn(bd){
   if (n.getMonth() < b.getMonth() || (n.getMonth()===b.getMonth() && n.getDate() < b.getDate())) a--;
   return a;
 }
+var FULL = {ATL:'Atlanta Hawks',BKN:'Brooklyn Nets',BOS:'Boston Celtics',CHA:'Charlotte Hornets',CHI:'Chicago Bulls',CLE:'Cleveland Cavaliers',DAL:'Dallas Mavericks',DEN:'Denver Nuggets',DET:'Detroit Pistons',GS:'Golden State Warriors',HOU:'Houston Rockets',IND:'Indiana Pacers',LAC:'LA Clippers',LAL:'Los Angeles Lakers',MEM:'Memphis Grizzlies',MIA:'Miami Heat',MIL:'Milwaukee Bucks',MIN:'Minnesota Timberwolves',NO:'New Orleans Pelicans',NY:'New York Knicks',OKC:'Oklahoma City Thunder',ORL:'Orlando Magic',PHI:'Philadelphia 76ers',PHX:'Phoenix Suns',POR:'Portland Trail Blazers',SA:'San Antonio Spurs',SAC:'Sacramento Kings',TOR:'Toronto Raptors',UTAH:'Utah Jazz',WSH:'Washington Wizards'};
 function renderRoster(){
-  var M = L.mem, rows = '';
+  var FAV = window.NBA_FAV, M = L.mem, rows = '';
+  document.getElementById('rost-h').textContent = (FULL[FAV] || FAV)+' roster'; var jb = document.getElementById('toRoster'); if (jb) jb.textContent = 'Jump to '+(FULL[FAV] ? FULL[FAV].split(' ').slice(-1)[0] : FAV)+' roster';
+  if (FAV !== 'MEM'){
+    /* another favorite: the roster is everyone who has played for the team this season, from the box scores (size, age and contract status are only on file for Memphis) */
+    var st = (window.NBA_STANDINGS[CUR] || {})[FAV] || {w:0, l:0}, pos = L.pos || {};
+    document.getElementById('rostmeta').textContent = st.w+'-'+st.l+' \u00B7 players who have appeared this season, from the box scores \u00B7 stats through '+fmtDate(L.asof);
+    var pl = L.players.filter(function(a){ return a[2] === FAV && a[3] > 0; }).sort(function(a, b){ return b[4] - a[4]; });
+    document.querySelector('#rtable tbody').innerHTML = '<tr class="grp"><td colspan="13">Played this season ('+pl.length+')</td></tr>'+pl.map(function(a){
+      var gp = a[3]; return '<tr><td>\u2013</td><td class="pn"><span data-pid="'+a[0]+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(a[1])+'</span></td><td class="l">'+(pos[String(a[0])] || '\u2013')+'</td><td class="num">\u2013</td><td class="num">\u2013</td><td class="num">\u2013</td><td class="num">\u2013</td><td class="l">\u2013</td>'+
+        '<td class="num">'+gp+'</td><td class="num">'+(a[4]/gp).toFixed(1)+'</td><td class="num">'+(a[5]/gp).toFixed(1)+'</td><td class="num">'+(a[14]/gp).toFixed(1)+'</td><td class="num">'+(a[15]/gp).toFixed(1)+'</td></tr>'; }).join('');
+    document.getElementById('rnote').textContent = 'Jersey numbers, size, age, experience and college are kept only for the Grizzlies. Pick Memphis as the favorite team on The Grindhouse tab to see the full roster card.';
+    return;
+  }
   document.getElementById('rostmeta').textContent = M.record[0]+'-'+M.record[1]+' \u00B7 Head coach '+M.coach+' \u00B7 Roster as of '+fmtDate(M.rosterAsOf)+', stats through '+fmtDate(L.asof);
   function line(r){
     var s = r.pid ? BYID[r.pid] : null, gp = s ? s.gp : 0;
@@ -2507,19 +2565,21 @@ function indexRows(){
   ROWS.forEach(function(r){ (BYDATE[r[0]] = BYDATE[r[0]] || []).push(r); if (r[4] === 1 && (!LAST_DONE || r[0] > LAST_DONE)) LAST_DONE = r[0]; });
   DATES = Object.keys(BYDATE).sort();
 }
+function tcol(team){ var c = L.tcolors && L.tcolors[team]; return c && /^[0-9a-f]{6}$/i.test(c[0]) ? '#'+c[0] : 'var(--muted)'; }
 function gameHtml(r){
   var away = r[2], home = r[3], done = r[4] === 1, aw = r[5], hs = r[6];
-  var awin = done && aw > hs, hwin = done && hs > aw;
+  var awin = done && aw > hs, hwin = done && hs > aw, wcol = awin ? tcol(away) : hwin ? tcol(home) : null;
   var score = done
     ? '<span class="gm-t'+(awin?' win':'')+'">'+NAMES[away]+' <b>'+aw+'</b></span><span class="gm-t'+(hwin?' win':'')+'">'+NAMES[home]+' <b>'+hs+'</b></span>'
     : '<span class="gm-t">'+NAMES[away]+' at '+NAMES[home]+'</span>';
   var tags = (r[7] ? '<span class="gm-tag">OT</span>' : '')+(r[8] ? '<span class="gm-tag cup">NBA Cup final</span>' : '');
-  if (window.NBA_MODEL){ var ra = window.NBA_MODEL.restDays(away, r[0]), rh = window.NBA_MODEL.restDays(home, r[0]), bb = []; if (ra === 0) bb.push(away); if (rh === 0) bb.push(home); if (bb.length) tags += '<span class="gm-tag b2b" title="Second game in two days">back-to-back: '+bb.join(', ')+'</span>'; }
+  if (window.NBA_MODEL){ var b2b = function(t){ return window.NBA_MODEL.restDays(t, r[0]) === 0 ? ' <abbr class="b2b" title="Back-to-back: second game in two days">(B2B)</abbr>' : ''; }, an = '<span class="tm"><i class="tdot" style="background:'+tcol(away)+'"></i>'+NAMES[away]+b2b(away)+'</span>', hn = '<span class="tm"><i class="tdot" style="background:'+tcol(home)+'"></i>'+NAMES[home]+b2b(home)+'</span>';
+    score = done ? '<span class="gm-t'+(awin?' win':'')+'">'+an+'<b>'+aw+'</b></span><span class="gm-t'+(hwin?' win':'')+'">'+hn+'<b>'+hs+'</b></span>' : '<span class="gm-t up">'+an+' at '+hn+'</span>'; }
   var click = done && r[13] && window.NBA_GAMES && window.NBA_GAMES.has(r[13]);
   var right = done
     ? (r[9] ? '<span class="gm-top">Top scorer <span data-pid="'+r[12]+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(r[9])+'</span> ('+esc(r[10])+') <b>'+r[11]+'</b></span>' : '')
     : '<span class="gm-time">'+esc(r[1])+'</span>';
-  return '<li class="game'+(done ? ' done' : '')+'"'+(click ? ' data-gid="'+r[13]+'" tabindex="0" role="button" title="Open the box score, score flow and shot maps"' : '')+'><div class="gm-score">'+score+'</div>'+tags+right+(click ? '<span class="gm-more">Box score \u203A</span>' : '')+'</li>';
+  return '<li class="game'+(done ? ' done' : '')+'"'+(click ? ' data-gid="'+r[13]+'" tabindex="0" role="button" title="Open the box score, score flow and shot maps"' : '')+(wcol ? ' style="--wc:'+wcol+'"' : '')+'><div class="gm-score">'+score+'</div>'+tags+right+(click ? '<span class="gm-more">Box score \u203A</span>' : '')+'</li>';
 }
 function setDate(d, fromInput){
   curDate = d;
@@ -2562,7 +2622,7 @@ function renderStandings(){
     }).sort(function(a,b){ return (b.pct - a.pct) || (b.w - a.w) || (b.net - a.net); });
     body += '<div class="stcol"><h3>'+conf+'ern Conference</h3><div class="scroll"><table class="stbl"><thead><tr><th scope="col">#</th><th scope="col" class="l">Team</th><th scope="col">W-L</th><th scope="col">PCT</th><th scope="col">Off</th><th scope="col">Def</th><th scope="col">Net</th></tr></thead><tbody>';
     rows.forEach(function(r, i){
-      body += '<tr data-team="'+r.t+'"'+(r.t === 'MEM' ? ' class="mem"' : '')+'><td>'+(i+1)+'</td><td class="l"><span class="tmn" role="link" tabindex="0" data-team="'+r.t+'" title="See where opponents shoot against this team">'+NAMES[r.t]+'</span>'+(r.lead ? ' <span class="dlead" title="Leads the '+r.div+' Division">'+(r.cl ? '\u2605' : '\u25CF')+'</span>' : '')+'</td><td>'+r.w+'-'+r.l+'</td><td>'+(r.pct >= 0 ? r.pct.toFixed(3).replace(/^0/, '') : '\u2013')+'</td><td>'+(r.o != null ? r.o.toFixed(1) : '\u2013')+'</td><td>'+(r.d != null ? r.d.toFixed(1) : '\u2013')+'</td><td>'+(r.o != null ? (r.net >= 0 ? '+' : '\u2212')+Math.abs(r.net).toFixed(1) : '\u2013')+'</td></tr>';
+      body += '<tr data-team="'+r.t+'"'+(r.t === window.NBA_FAV ? ' class="mem"' : '')+'><td>'+(i+1)+'</td><td class="l"><span class="tmn" role="link" tabindex="0" data-team="'+r.t+'" title="See where opponents shoot against this team">'+NAMES[r.t]+'</span>'+(r.lead ? ' <span class="dlead" title="Leads the '+r.div+' Division">'+(r.cl ? '\u2605' : '\u25CF')+'</span>' : '')+'</td><td>'+r.w+'-'+r.l+'</td><td>'+(r.pct >= 0 ? r.pct.toFixed(3).replace(/^0/, '') : '\u2013')+'</td><td>'+(r.o != null ? r.o.toFixed(1) : '\u2013')+'</td><td>'+(r.d != null ? r.d.toFixed(1) : '\u2013')+'</td><td>'+(r.o != null ? (r.net >= 0 ? '+' : '\u2212')+Math.abs(r.net).toFixed(1) : '\u2013')+'</td></tr>';
     });
     body += '</tbody></table></div></div>';
   });
@@ -2715,7 +2775,7 @@ function compute(season, win){
 }
 
 /* ---------- state and markup ---------- */
-var S = {season:CUR, win:'season', x:'drtg', y:'ortg', flip:true, focus:'MEM', sort:null, dir:1, pinned:null};
+var S = {season:CUR, win:'season', x:'drtg', y:'ortg', flip:true, focus:window.NBA_FAV, sort:null, dir:1, pinned:null};
 var DATA = {};
 function optGroups(selected){
   var groups = [], seen = {};
@@ -2751,7 +2811,7 @@ function build(){
 }
 
 /* ---------- team defense shot chart (it used to live on the Scores & teams tab) ---------- */
-var tc = null, tdReady = false, tdState = {team:'MEM', season:APP.SEASON_KEYS[0], type:'reg', metric:'diff'};
+var tc = null, tdReady = false, tdState = {team:window.NBA_FAV, season:APP.SEASON_KEYS[0], type:'reg', metric:'diff'};
 function oppFor(team, keys, type){
   var fga = new Array(NZ).fill(0), fgm = new Array(NZ).fill(0);
   keys.forEach(function(k){
@@ -2835,7 +2895,7 @@ function openDefense(t){
 }
 
 /* ---------- lineups and pairs (the tables come from the Team hub script) ---------- */
-var luTeam = 'MEM';
+var luTeam = window.NBA_FAV;
 function lineupsHtml(){
   var opts = TEAMS.slice().sort(function(a,b){ return NAMES[a] < NAMES[b] ? -1 : 1; }).map(function(t){ return '<option value="'+t+'">'+NAMES[t]+'</option>'; }).join('');
   return '<section class="card lusec" id="lineups" aria-labelledby="lu-h"><h2 id="lu-h">Lineups and duos</h2><p class="smn">The five-man lineups or two-man duos a team has used most, and how they have done. Follows the team highlighted above and the season chosen above.</p><div class="tsrow"><div class="field"><label for="lu-team">Team</label><select id="lu-team">'+opts+'</select></div></div><div id="lu-body"></div></section>';
@@ -2961,7 +3021,7 @@ function renderTable(){
   }).join('')+'</tr>';
   var rows = sortedTeams().map(function(t){
     var d = DATA[t];
-    return '<tr data-team="'+t+'" class="'+(t === 'MEM' ? 'mem ' : '')+(t === S.focus ? 'sel' : '')+'"><td class="l"><span class="tmn" role="link" tabindex="0" data-team="'+t+'">'+esc(NAMES[t])+'</span></td><td>'+d.W+'-'+d.L+'</td><td>'+d.G+'</td>'+
+    return '<tr data-team="'+t+'" class="'+(t === window.NBA_FAV ? 'mem ' : '')+(t === S.focus ? 'sel' : '')+'"><td class="l"><span class="tmn" role="link" tabindex="0" data-team="'+t+'">'+esc(NAMES[t])+'</span></td><td>'+d.W+'-'+d.L+'</td><td>'+d.G+'</td>'+
       cols.slice(3).map(function(c){ return '<td'+(c[0] === S.x || c[0] === S.y ? ' class="hl"' : '')+'>'+fmt(SBY[c[0]], d[c[0]])+'</td>'; }).join('')+'</tr>';
   }).join('');
   el('ts-table').querySelector('tbody').innerHTML = rows;
@@ -3054,7 +3114,7 @@ function init(){
     initTeamDef(); window.NBA_TEAMS = {openDefense: openDefense}; return;
   }
   applyHashState(); build(); wire(); initTeamDef(); statsBuilt = true; window.NBA_TEAMS = {openDefense: openDefense};
-  el('ts-season').value = S.season; el('ts-win').value = S.win; el('ts-focus').value = S.focus; el('ts-flip').checked = S.flip; luTeam = S.focus || 'MEM'; if (S.focus){ tdState.team = S.focus; renderTeamDef(); }
+  el('ts-season').value = S.season; el('ts-win').value = S.win; el('ts-focus').value = S.focus; el('ts-flip').checked = S.flip; luTeam = S.focus || window.NBA_FAV; if (S.focus){ tdState.team = S.focus; renderTeamDef(); }
   el('lu-team').addEventListener('change', function(e){ luTeam = e.target.value; renderLineups(); });
   el('lu-body').addEventListener('click', function(e){ var nm = e.target.closest ? e.target.closest('[data-pid]') : null; if (nm && window.NBA_APP){ e.stopPropagation(); window.NBA_APP.openPlayer(+nm.getAttribute('data-pid'), {season:S.season}); } });
   el('ts-lede').textContent = 'Plot any two team statistics against each other for all 30 teams, over the whole season, the latest games, or home and road games. Pick a preset or choose your own axes. A defense shot chart for every team is at the bottom. Data through '+fmtDay(L.asof)+' ('+L.games+' games).';
@@ -3169,6 +3229,33 @@ LIB.shareLink = function(tab, state){
   if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(url).then(done, function(){ window.prompt('Copy this link', url); return url; });
   window.prompt('Copy this link', url); return Promise.resolve(url);
 };
+/* click any column heading to sort that table (tables with their own sort buttons are left alone); group, total and separator rows stay where they are */
+LIB.cellValue = function(td){
+  var s = td.textContent.replace(/[\u25B2\u25BC]/g, '').trim(); if (!s || s === '\u2013' || s === '-') return {n:-Infinity, s:''};
+  var m = s.replace(/[,%+]/g, '').replace(/\u2212/g, '-'), num = parseFloat(m);
+  if (/^-?\d+(\.\d+)?$/.test(m)) return {n:num, s:s};
+  var frac = m.match(/^(\d+)[-\/](\d+)$/); if (frac) return {n:+frac[1] - (+frac[2]) / 1000, s:s};   // records like 6-1 and made/attempted like 7/15
+  return {n:null, s:s.toLowerCase()};
+};
+document.addEventListener('click', function(e){
+  var th = e.target.closest ? e.target.closest('th') : null; if (!th || e.target.closest('button, a, input, select')) return;
+  var table = th.closest('table'); if (!table || table.querySelector('thead .sortbtn') || table.classList.contains('nosort')) return;
+  var tbody = table.tBodies[0]; if (!tbody) return;
+  var idx = Array.prototype.indexOf.call(th.parentNode.children, th), asc = th.getAttribute('aria-sort') === 'descending';
+  Array.prototype.forEach.call(table.querySelectorAll('th[aria-sort]'), function(h){ h.removeAttribute('aria-sort'); });
+  th.setAttribute('aria-sort', asc ? 'ascending' : 'descending');
+  var rows = Array.prototype.slice.call(tbody.rows), segs = [], cur = [];
+  rows.forEach(function(r){ if (r.classList.contains('grp') || r.classList.contains('tot') || r.classList.contains('sep') || r.cells.length <= idx){ if (cur.length){ segs.push(cur); cur = []; } segs.push([r]); } else cur.push(r); });
+  if (cur.length) segs.push(cur);
+  var out = [];
+  segs.forEach(function(seg){
+    if (seg.length === 1 && (seg[0].classList.contains('grp') || seg[0].classList.contains('tot') || seg[0].classList.contains('sep') || seg[0].cells.length <= idx)){ out.push(seg[0]); return; }
+    var keyed = seg.map(function(r, i){ return {r:r, i:i, v:LIB.cellValue(r.cells[idx])}; });
+    keyed.sort(function(a, b){ var c; if (a.v.n !== null && b.v.n !== null) c = a.v.n - b.v.n; else if (a.v.n !== null) c = -1; else if (b.v.n !== null) c = 1; else c = a.v.s < b.v.s ? -1 : a.v.s > b.v.s ? 1 : 0; return (asc ? c : -c) || a.i - b.i; });
+    keyed.forEach(function(k){ out.push(k.r); });
+  });
+  out.forEach(function(r){ tbody.appendChild(r); });
+});
 /* seeded random numbers, so a simulation can be repeated exactly */
 LIB.rng = function(seed){ var a = seed | 0; return function(){ a = (a + 0x6D2B79F5) | 0; var t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
 LIB.erf = function(x){ var s = x < 0 ? -1 : 1; x = Math.abs(x); var t = 1 / (1 + 0.3275911 * x); var y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return s * y; };
@@ -3231,7 +3318,9 @@ var STATS = [
  {k:'offnet',g:'On/off (needs 40+ minutes on and off)',l:'Net rating, off the floor',b:'none',t:'The team\u2019s net rating while the player is on the bench (in games he played).',f:function(p,a,oo){ var o = onoffOf(oo); return o ? o.off : null; }},
  {k:'onortg',g:'On/off (needs 40+ minutes on and off)',l:'Offensive rating, on the floor',b:'high',t:'Team points scored per 100 possessions while the player is on the floor.',f:function(p,a,oo){ var o = onoffOf(oo); return o ? o.onF : null; }},
  {k:'ondrtg',g:'On/off (needs 40+ minutes on and off)',l:'Defensive rating, on the floor',b:'low',t:'Team points allowed per 100 possessions while the player is on the floor. Lower is better.',f:function(p,a,oo){ var o = onoffOf(oo); return o ? o.onA : null; }},
- {k:'ddiff',g:'On/off (needs 40+ minutes on and off)',l:'Defense on/off gap',b:'high',t:'Points allowed per 100 possessions with the player off the floor minus with him on. Positive means the team defends better with him.',f:function(p,a,oo){ var o = onoffOf(oo); return o ? o.offA - o.onA : null; }}
+ {k:'ddiff',g:'On/off (needs 40+ minutes on and off)',l:'Defense on/off gap',b:'high',t:'Points allowed per 100 possessions with the player off the floor minus with him on. Positive means the team defends better with him.',f:function(p,a,oo){ var o = onoffOf(oo); return o ? o.offA - o.onA : null; }},
+ {k:'rimdet',g:'On/off (needs 40+ minutes on and off)',l:'Rim deterrence (attempt share)',b:'high',t:'Share of opponents\u2019 shots taken at the rim with the player off the floor minus with him on, in percentage points. Positive means opponents go to the rim less when he plays.',f:function(p,a,oo){ if (!oo || oo.length < 17 || oo[11] < 50 || oo[14] < 50 || oo[1] < MINSEC || oo[6] < MINSEC) return null; return 100*(oo[15]/oo[14] - oo[12]/oo[11]); }},
+ {k:'rimfg',g:'On/off (needs 40+ minutes on and off)',l:'Rim deterrence (FG% allowed)',b:'high',t:'Opponents\u2019 FG% at the rim with the player off the floor minus with him on. Positive means they finish worse when he plays.',f:function(p,a,oo){ if (!oo || oo.length < 17 || oo[12] < 20 || oo[15] < 20 || oo[1] < MINSEC || oo[6] < MINSEC) return null; return 100*(oo[16]/oo[15] - oo[13]/oo[12]); }}
 ];
 var SBY = {}; STATS.forEach(function(s){ SBY[s.k] = s; });
 var PRESETS = [
@@ -3384,7 +3473,7 @@ function renderTable(){
   el('pl-table').querySelector('thead').innerHTML = '<tr>'+cols.map(function(c){ var on = key === c[0]; return '<th scope="col"'+(on ? ' aria-sort="'+(dir === 1 ? 'ascending' : 'descending')+'"' : '')+'><button type="button" class="sortbtn" data-k="'+c[0]+'">'+esc(c[1])+(on ? (dir === 1 ? ' \u25B2' : ' \u25BC') : '')+'</button></th>'; }).join('')+'</tr>';
   var rows = sortedRows(), shown = S.all ? rows : rows.slice(0, 60);
   el('pl-table').querySelector('tbody').innerHTML = shown.map(function(d){
-    return '<tr data-row="'+d.pid+'" class="'+(d.team === 'MEM' ? 'mem ' : '')+(d.pid === S.hl ? 'sel' : '')+'"><td class="l"><span data-pid="'+d.pid+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(d.name)+'</span></td><td class="l">'+esc(d.team)+'</td><td>'+d.gp+'</td><td>'+fmt({}, d.mpg)+'</td>'+
+    return '<tr data-row="'+d.pid+'" class="'+(d.team === window.NBA_FAV ? 'mem ' : '')+(d.pid === S.hl ? 'sel' : '')+'"><td class="l"><span data-pid="'+d.pid+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(d.name)+'</span></td><td class="l">'+esc(d.team)+'</td><td>'+d.gp+'</td><td>'+fmt({}, d.mpg)+'</td>'+
       cols.slice(4).map(function(c){ return '<td'+(c[0] === S.x || c[0] === S.y ? ' class="hl"' : '')+'>'+fmt(SBY[c[0]], d[c[0]])+'</td>'; }).join('')+'</tr>';
   }).join('');
   var more = el('pl-more'); more.hidden = rows.length <= 60; more.textContent = S.all ? 'Show only the top 60' : 'Show all '+rows.length+' players';
@@ -3525,20 +3614,44 @@ function restTag(team, date){
 /* ---------- simulation ---------- */
 function simulate(N, seed){
   var rt = ratings(CUR), rec = record(CUR), teams = Object.keys(rt.r).sort(), idx = {}; teams.forEach(function(t, i){ idx[t] = i; });
-  var nT = teams.length, conf = teams.map(function(t){ var s = (window.NBA_STANDINGS[CUR] || {})[t]; return s ? s.conf : 'East'; });
+  var nT = teams.length, ST = window.NBA_STANDINGS[CUR] || {}, conf = teams.map(function(t){ var s = ST[t]; return s ? s.conf : 'East'; }), div = teams.map(function(t){ var s = ST[t]; return s ? s.div : ''; });
   var rem = []; var left = new Array(nT).fill(0);
   REM.forEach(function(g){ if (idx[g.home] === undefined || idx[g.away] === undefined) return; var h = idx[g.home], a = idx[g.away]; rem.push([h, a, pHome(rt.r[g.home], rt.r[g.away])]); left[h]++; left[a]++; });
+  /* head-to-head and conference records so far, for the league's tiebreakers */
+  var h2h0 = new Int16Array(nT * nT), cw0 = new Int16Array(nT), cg0 = new Int16Array(nT), sg = TD.seasonGames(CUR);
+  teams.forEach(function(t, i){ (sg.games[t] || []).forEach(function(r){ var j = idx[r.opp]; if (j === undefined) return; var win = r.o[0] > r.p[0]; if (win) h2h0[i*nT + j]++; if (conf[i] === conf[j]){ cg0[i]++; if (win) cw0[i]++; } }); });
+  var rating = teams.map(function(t){ return rt.r[t]; });
+  function orderConf(ids, wins, h2h, cw, cg){
+    /* sort by wins, then break ties the way the league does: head-to-head among the tied teams, division winner, conference record, then point differential (the rating stands in for it) */
+    var divWinner = {}; ids.forEach(function(i){ var d = div[i]; if (divWinner[d] === undefined || wins[i] > wins[divWinner[d]]) divWinner[d] = i; });
+    function resolve(group, depth){
+      if (group.length < 2) return group;
+      var keyFn = [
+        function(i){ var w = 0, g = 0; group.forEach(function(j){ if (j !== i){ w += h2h[i*nT + j]; g += h2h[i*nT + j] + h2h[j*nT + i]; } }); return g ? w / g : 0.5; },
+        function(i){ return divWinner[div[i]] === i ? 1 : 0; },
+        function(i){ return cg[i] ? cw[i] / cg[i] : 0.5; },
+        function(i){ return rating[i]; }
+      ][depth];
+      if (!keyFn) return group.slice().sort(function(a, b){ return a - b; });
+      var key = {}; group.forEach(function(i){ key[i] = keyFn(i); });
+      var sorted = group.slice().sort(function(a, b){ return key[b] - key[a] || a - b; }), out = [], k = 0;
+      while (k < sorted.length){ var m = k; while (m + 1 < sorted.length && Math.abs(key[sorted[m+1]] - key[sorted[k]]) < 1e-9) m++; var sub = sorted.slice(k, m + 1); out = out.concat(sub.length > 1 ? (sub.length === group.length ? resolve(sub, depth + 1) : resolve(sub, 0)) : sub); k = m + 1; }
+      return out;
+    }
+    var byWins = ids.slice().sort(function(a, b){ return wins[b] - wins[a] || a - b; }), out = [], k = 0;
+    while (k < byWins.length){ var m = k; while (m + 1 < byWins.length && wins[byWins[m+1]] === wins[byWins[k]]) m++; out = out.concat(resolve(byWins.slice(k, m + 1), 0)); k = m + 1; }
+    return out;
+  }
   var played = teams.map(function(t){ return rec.w[t] + rec.l[t]; }), extra = teams.map(function(t, i){ return Math.max(0, M.GAMES - played[i] - left[i]); }), pAvg = teams.map(function(t){ return LIB.phi(rt.r[t] / M.SIG); });
-  var w0 = teams.map(function(t){ return rec.w[t]; }), rnd = LIB.rng(seed), seeds = new Int32Array(nT * 15), wins = new Uint8Array(N * nT), cur = new Float64Array(nT), key = new Float64Array(nT);
+  var w0 = teams.map(function(t){ return rec.w[t]; }), rnd = LIB.rng(seed), seeds = new Int32Array(nT * 15), wins = new Uint8Array(N * nT), cur = new Float64Array(nT);
   var confIdx = {East:[], West:[]}; conf.forEach(function(c, i){ confIdx[c].push(i); });
+  var h2h = new Int16Array(nT * nT), cw = new Int16Array(nT), cg = new Int16Array(nT);
   for (var s = 0; s < N; s++){
-    for (var i = 0; i < nT; i++) cur[i] = w0[i];
-    for (var g = 0; g < rem.length; g++){ var h = rem[g][0], a = rem[g][1]; if (rnd() < rem[g][2]) cur[h]++; else cur[a]++; }
-    for (i = 0; i < nT; i++){ for (var m = 0; m < extra[i]; m++) if (rnd() < pAvg[i]) cur[i]++; wins[s*nT + i] = cur[i]; key[i] = cur[i] + rnd() * 0.5; }
-    ['East', 'West'].forEach(function(c){
-      var ids = confIdx[c].slice().sort(function(x, y){ return key[y] - key[x]; });
-      ids.forEach(function(t, pos){ seeds[t*15 + pos]++; });
-    });
+    for (var i = 0; i < nT; i++){ cur[i] = w0[i]; cw[i] = cw0[i]; cg[i] = cg0[i]; }
+    h2h.set(h2h0);
+    for (var g = 0; g < rem.length; g++){ var h = rem[g][0], a = rem[g][1], same = conf[h] === conf[a]; if (rnd() < rem[g][2]){ cur[h]++; h2h[h*nT + a]++; if (same) cw[h]++; } else { cur[a]++; h2h[a*nT + h]++; if (same) cw[a]++; } if (same){ cg[h]++; cg[a]++; } }
+    for (i = 0; i < nT; i++){ for (var m = 0; m < extra[i]; m++) if (rnd() < pAvg[i]) cur[i]++; wins[s*nT + i] = cur[i]; }
+    ['East', 'West'].forEach(function(c){ orderConf(confIdx[c], cur, h2h, cw, cg).forEach(function(t, pos){ seeds[t*15 + pos]++; }); });
   }
   var out = {};
   teams.forEach(function(t, i){
@@ -3582,7 +3695,7 @@ function backtest(){
 }
 
 /* ---------- display ---------- */
-var S = {N:10000, seed:null, sim:null, sort:'dist', dir:-1};
+var S = {N:50000, seed:null, sim:null, sort:'dist', dir:-1};
 function bar(v, cls){ return '<span class="pbar"><i class="'+cls+'" style="width:'+(100*v).toFixed(1)+'%"></i></span><span class="pnum">'+(v >= 0.995 ? '>99' : v < 0.005 ? (v === 0 ? '0' : '<1') : Math.round(v*100))+'%</span>'; }
 function renderProj(){
   var sim = S.sim, html = '';
@@ -3590,12 +3703,12 @@ function renderProj(){
     var rows = Object.keys(sim.teams).map(function(t){ return sim.teams[t]; }).filter(function(x){ return x.conf === c; }).sort(function(a, b){ return b.exp - a.exp; });
     html += '<div class="stcol"><h3>'+c+'ern Conference</h3><div class="scroll"><table class="stbl projtbl" data-conf="'+c+'"><thead><tr><th>#</th><th class="l">Team</th><th>W-L</th><th>Proj. wins</th><th>10-90%</th><th class="l">Top 6</th><th class="l">Play-in</th><th class="l">Out</th></tr></thead><tbody>';
     rows.forEach(function(x, i){
-      html += '<tr'+(x.team === 'MEM' ? ' class="mem"' : '')+'><td>'+(i+1)+'</td><td class="l"><span class="tmn" role="link" tabindex="0" data-team="'+x.team+'">'+esc(NAMES[x.team])+'</span></td><td>'+x.w+'-'+x.l+'</td><td><b>'+x.exp.toFixed(1)+'</b></td><td>'+x.p10+'-'+x.p90+'</td><td class="l">'+bar(x.top6, 'g')+'</td><td class="l">'+bar(x.playin, 'y')+'</td><td class="l">'+bar(x.out, 'r')+'</td></tr>';
+      html += '<tr'+(x.team === window.NBA_FAV ? ' class="mem"' : '')+'><td>'+(i+1)+'</td><td class="l"><span class="tmn" role="link" tabindex="0" data-team="'+x.team+'">'+esc(NAMES[x.team])+'</span></td><td>'+x.w+'-'+x.l+'</td><td><b>'+x.exp.toFixed(1)+'</b></td><td>'+x.p10+'-'+x.p90+'</td><td class="l">'+bar(x.top6, 'g')+'</td><td class="l">'+bar(x.playin, 'y')+'</td><td class="l">'+bar(x.out, 'r')+'</td></tr>';
     });
     html += '</tbody></table></div></div>';
   });
   el('ol-proj').innerHTML = html;
-  el('ol-projsub').textContent = 'Based on '+sim.N.toLocaleString('en-US')+' simulations of the rest of the season (random seed '+sim.seed+'). Top 6 clinch a playoff spot, 7 to 10 go to the play-in, 11 to 15 miss out. Ties are broken at random, which is a simplification.';
+  el('ol-projsub').textContent = 'Based on '+sim.N.toLocaleString('en-US')+' simulations of the rest of the season (random seed '+sim.seed+'). Top 6 clinch a playoff spot, 7 to 10 go to the play-in, 11 to 15 miss out. Ties in the standings are broken the way the league does it: head-to-head record among the tied teams, division winner, conference record, then point differential (the team rating stands in for it).';
 }
 function schedRows(){
   var rt = ratings(CUR), by = {}; LIB.teamList.forEach(function(t){ by[t] = {team:t, g:0, home:0, away:0, b2b:0, opp:0, next7:0}; });
@@ -3617,7 +3730,7 @@ function renderSched(){
   });
   var cols = [['team','Team','l'],['g','Games left',''],['home','Home',''],['away','Road',''],['b2b','Back-to-backs left',''],['next7','Next 7 days',''],['avg','Avg. opponent rating',''],['rank','Schedule rank (1 = hardest)','']];
   var head = '<tr>'+cols.map(function(c){ var on = S.sort === c[0]; return '<th class="'+c[2]+'"'+(on ? ' aria-sort="'+(S.dir === 1 ? 'ascending' : 'descending')+'"' : '')+'><button type="button" class="sortbtn" data-k="'+c[0]+'">'+esc(c[1])+(on ? (S.dir === 1 ? ' \u25B2' : ' \u25BC') : '')+'</button></th>'; }).join('')+'</tr>';
-  var body = rows.map(function(r){ return '<tr'+(r.team === 'MEM' ? ' class="mem"' : '')+'><td class="l"><span class="tmn" role="link" tabindex="0" data-team="'+r.team+'">'+esc(NAMES[r.team])+'</span></td><td>'+r.g+'</td><td>'+r.home+'</td><td>'+r.away+'</td><td>'+r.b2b+'</td><td>'+r.next7+'</td><td>'+LIB.sgn(r.avg, 2)+'</td><td>'+r.rank+'</td></tr>'; }).join('');
+  var body = rows.map(function(r){ return '<tr'+(r.team === window.NBA_FAV ? ' class="mem"' : '')+'><td class="l"><span class="tmn" role="link" tabindex="0" data-team="'+r.team+'">'+esc(NAMES[r.team])+'</span></td><td>'+r.g+'</td><td>'+r.home+'</td><td>'+r.away+'</td><td>'+r.b2b+'</td><td>'+r.next7+'</td><td>'+LIB.sgn(r.avg, 2)+'</td><td>'+r.rank+'</td></tr>'; }).join('');
   el('ol-sched').querySelector('thead').innerHTML = head; el('ol-sched').querySelector('tbody').innerHTML = body;
 }
 function renderBacktest(){
@@ -3633,13 +3746,13 @@ function init(){
   var root = el('view-outlook');
   root.innerHTML = '<h1>Projections</h1><div class="lhead"><p class="lede" id="ol-lede">&nbsp;</p></div><div class="banner" id="sb-o" hidden></div>'+
     '<section class="card projsec" id="projections" aria-labelledby="ol-h"><h2 id="ol-h">Projected standings and playoff odds</h2><p class="smn" id="ol-projsub"></p>'+
-      '<div class="tsrow"><div class="field"><label for="ol-n">Simulations</label><select id="ol-n"><option value="2000">2,000 (fast)</option><option value="10000" selected>10,000</option><option value="50000">50,000 (slower)</option></select></div>'+
+      '<div class="tsrow"><div class="field"><label for="ol-n">Simulations</label><select id="ol-n"><option value="2000">2,000 (fast)</option><option value="10000">10,000</option><option value="50000" selected>50,000</option></select></div>'+
       '<button type="button" class="randbtn" id="ol-rerun" title="Run the simulations again with a different random seed">\uD83C\uDFB2 Run again</button></div>'+
       '<div class="stgrid" id="ol-proj"></div><p class="smn" id="ol-miss"></p></section>'+
     '<section class="card schedsec" id="schedule" aria-labelledby="ol-sh"><h2 id="ol-sh">The schedule ahead</h2><p class="smn">What is left for each team: how many games, how many on the road, back-to-backs (the second game in two days), and how strong the opponents are (the average rating of the opponents still to face, in points per 100 possessions, so +2 means a tougher road than average).</p><div class="scroll"><table class="stbl" id="ol-sched"><thead></thead><tbody></tbody></table></div></section>'+
     '<section class="card tsdefs" id="how"><details><summary>How the projections work and how well they have done</summary><div id="ol-how"></div></details></section>';
   el('ol-how').innerHTML = '<p><b>The model.</b> Each team\u2019s strength is its net rating so far (points scored minus allowed per 100 possessions, with possessions estimated from the box score), blended with 40% of last season\u2019s final net rating. This season counts as much as the games played so far against 10 games of last season\u2019s rating, so it takes over steadily. The expected margin of a game is the difference in strength plus 2.0 points for the home team, and the chance of winning follows from a game-to-game spread of 12.5 points. Each simulation plays out every remaining game that way and then ranks the conferences.</p><p><b>How it did.</b></p><div id="ol-bt"></div>'+
-    '<p><b>What it leaves out.</b> Injuries, trades and back-to-back fatigue are not in the model, and ties in the standings are broken at random rather than by the league\u2019s tiebreakers. Early in a season the ratings rest on only a handful of games, so the odds are wide.</p>';
+    '<p><b>What it leaves out.</b> Injuries, trades and back-to-back fatigue are not in the model. Ties in the standings follow the league\u2019s tiebreakers (head-to-head, division winner, conference record, then point differential, with the team rating standing in for the margin since margins are not simulated); the games the schedule file is missing count toward wins but not toward head-to-head or conference records. Early in a season the ratings rest on only a handful of games, so the odds are wide.</p>';
   el('ol-lede').textContent = 'Where each team is headed: projected win totals and playoff odds from simulating the rest of the season, plus how hard each team\u2019s remaining schedule is. Data through '+LIB.fmtDay(L.asof, true)+' ('+L.games+' games).';
   var sb = el('sb-o'), txt = L.maxg < 20 ? 'Early season: no team has played more than '+L.maxg+' games, so every rating here rests on a handful of games and the odds are very wide. This notice goes away after 20 team games.' : ''; sb.textContent = txt; sb.hidden = !txt;
   run(); renderBacktest();
@@ -3674,7 +3787,7 @@ var LINEUPS = window.NBA_LINEUPS = {
   html:function(team, season, mode){
     var lu = LINEUPS.rows(team, season), pr = LINEUPS.pairs(team, season), cov = (L.lcov || {})[season] || (window.NBA_ARCHIVE && window.NBA_ARCHIVE.get(season, 'lcov')); mode = mode === 'pairs' ? 'pairs' : 'lineups';
     if (!lu.length) return '<p class="smn">No lineup data for this team and season'+(cov && cov[0] === 0 ? ': ESPN\u2019s substitution records are too thin this far back to rebuild lineups' : ' in this build')+'.</p>';
-    var a = '<fieldset class="seg luseg"><legend>Show</legend><div class="segbtns"><label><input type="radio" name="lumode-'+(++LINEUPS.n)+'" class="lumode" value="lineups"'+(mode === 'lineups' ? ' checked' : '')+'> Five-man lineups</label><label><input type="radio" name="lumode-'+LINEUPS.n+'" class="lumode" value="pairs"'+(mode === 'pairs' ? ' checked' : '')+'> Duos</label></div></fieldset>';
+    var a = '<div class="presets lubar" role="group" aria-label="Lineups or duos"><button type="button" class="chip lumode" data-mode="lineups" aria-pressed="'+(mode === 'lineups')+'">Five-man lineups</button><button type="button" class="chip lumode" data-mode="pairs" aria-pressed="'+(mode === 'pairs')+'">Duos</button></div>';
     if (mode === 'lineups'){
       a += '<h3>Most-used five-man lineups</h3><div class="scroll"><table class="stbl lutbl"><thead><tr><th class="l">Lineup</th><th>Min</th><th>Games</th><th>Pts for</th><th>Pts against</th><th>Net rating</th></tr></thead><tbody>';
       lu.forEach(function(r){ var net = netR(r[2], r[3], r[4], r[5]); a += '<tr><td class="l">'+r[0].map(function(p){ return '<span data-pid="'+p+'" role="link" tabindex="0">'+esc(LIB.lastName(p))+'</span>'; }).join(', ')+'</td><td>'+(r[1]/60).toFixed(0)+'</td><td>'+r[6]+'</td><td>'+Math.round(r[2])+'</td><td>'+Math.round(r[3])+'</td><td><b>'+LIB.sgn(net)+'</b></td></tr>'; });
@@ -3687,7 +3800,7 @@ var LINEUPS = window.NBA_LINEUPS = {
   n:0,
   mount:function(host, team, season){
     var mode = host.getAttribute('data-lumode') || 'lineups'; host.innerHTML = LINEUPS.html(team, season, mode); host.__lu = {team:team, season:season};
-    if (!host.__luwired){ host.__luwired = true; host.addEventListener('change', function(e){ if (e.target.classList && e.target.classList.contains('lumode')){ host.setAttribute('data-lumode', e.target.value); LINEUPS.mount(host, host.__lu.team, host.__lu.season); } }); }
+    if (!host.__luwired){ host.__luwired = true; host.addEventListener('click', function(e){ var b = e.target.closest ? e.target.closest('.lumode') : null; if (b){ host.setAttribute('data-lumode', b.getAttribute('data-mode')); LINEUPS.mount(host, host.__lu.team, host.__lu.season); } }); }
   }
 };
 
@@ -3724,8 +3837,16 @@ function matchupHtml(k, off, def){
 window.NBA_MATCHUP = {matchup:matchup, N0:N0};
 
 /* ---------- the hub ---------- */
-var S = {team:'MEM', opp:null};
-function nextOpp(team){ var u = MOD.upcoming(team, 1)[0]; return u ? u.opp : (team === 'MEM' ? 'POR' : 'MEM'); }
+var FAV = window.NBA_FAV || 'MEM';
+/* the colloquial name of each team's home arena; the tab and the heading take the favorite team's */
+var ARENA = {ATL:'The Highlight Factory',BKN:'Barclays',BOS:'The Garden',CHA:'The Hive',CHI:'The Madhouse on Madison',CLE:'The Q',DAL:'The AAC',DEN:'The Can',DET:'The LCA',GS:'Loserville',
+  HOU:'The Toyota Center',IND:'The Fieldhouse',LAC:'The Dome',LAL:'Idiot Town',MEM:'The Grindhouse',MIA:'The Triple-A',MIL:'The Fiserv',MIN:'Target Center',NO:'The Blender',NY:'The Garden',
+  OKC:'The Peake',ORL:'The Kia Center',PHI:'The Center',PHX:'The Purple Palace',POR:'The Rose Garden',SA:'The Frost',SAC:'The G1C',TOR:'The Hangar',UTAH:'The Delta Center',WSH:'The Phone Booth'};
+var FULLN = {ATL:'Atlanta Hawks',BKN:'Brooklyn Nets',BOS:'Boston Celtics',CHA:'Charlotte Hornets',CHI:'Chicago Bulls',CLE:'Cleveland Cavaliers',DAL:'Dallas Mavericks',DEN:'Denver Nuggets',DET:'Detroit Pistons',GS:'Golden State Warriors',HOU:'Houston Rockets',IND:'Indiana Pacers',LAC:'LA Clippers',LAL:'Los Angeles Lakers',MEM:'Memphis Grizzlies',MIA:'Miami Heat',MIL:'Milwaukee Bucks',MIN:'Minnesota Timberwolves',NO:'New Orleans Pelicans',NY:'New York Knicks',OKC:'Oklahoma City Thunder',ORL:'Orlando Magic',PHI:'Philadelphia 76ers',PHX:'Phoenix Suns',POR:'Portland Trail Blazers',SA:'San Antonio Spurs',SAC:'Sacramento Kings',TOR:'Toronto Raptors',UTAH:'Utah Jazz',WSH:'Washington Wizards'};
+var XH = {ATL:'ATLHawks',BKN:'BrooklynNets',BOS:'celtics',CHA:'hornets',CHI:'chicagobulls',CLE:'cavs',DAL:'dallasmavs',DEN:'nuggets',DET:'DetroitPistons',GS:'warriors',HOU:'HoustonRockets',IND:'Pacers',LAC:'LAClippers',LAL:'Lakers',MEM:'memgrizz',MIA:'MiamiHEAT',MIL:'Bucks',MIN:'Timberwolves',NO:'PelicansNBA',NY:'nyknicks',OKC:'okcthunder',ORL:'OrlandoMagic',PHI:'sixers',PHX:'Suns',POR:'trailblazers',SA:'spurs',SAC:'SacramentoKings',TOR:'Raptors',UTAH:'utahjazz',WSH:'WashWizards'};
+var ARENA_NAME = ARENA[FAV] || (NAMES[FAV]+' home'); window.NBA_ARENA_NAME = ARENA_NAME;
+var S = {team:FAV, opp:null};
+function nextOpp(team){ var u = MOD.upcoming(team, 1)[0]; return u ? u.opp : (team === FAV ? 'POR' : FAV); }
 function games(team){ return TD.seasonGames(CUR).games[team] || []; }
 function resultsFor(team){
   var out = []; (L.sched || []).forEach(function(r){ if (r[4] === 1 && (r[2] === team || r[3] === team)) out.push(r); });
@@ -3760,15 +3881,16 @@ function trendSvg(team){
 }
 function build(){
   var root = el('view-hub'), tm = LIB.teamList.slice().sort(function(a, b){ return NAMES[a] < NAMES[b] ? -1 : 1; }), opts = tm.map(function(t){ return '<option value="'+t+'">'+esc(NAMES[t])+'</option>'; }).join('');
-  root.innerHTML = '<h1 id="hub-h">The Grindhouse</h1><div class="lhead"><p class="lede" id="hub-lede">&nbsp;</p></div>'+
-    '<section class="card tsctl"><div class="tsrow"><div class="field"><label for="hub-team">Team</label><select id="hub-team">'+opts+'</select></div><div class="field"><label for="hub-opp">Opponent for the matchup</label><select id="hub-opp">'+opts+'</select></div></div></section>'+
+  root.innerHTML = '<h1 id="hub-h">'+esc(ARENA_NAME)+'</h1><div class="lhead"><p class="lede" id="hub-lede">&nbsp;</p></div>'+
+    '<section class="card tsctl"><div class="tsrow"><div class="field"><label for="hub-fav">Favorite team</label><select id="hub-fav">'+opts+'</select></div><div class="field"><label for="hub-opp">Opponent for the matchup</label><select id="hub-opp">'+opts+'</select></div></div><p class="smn">'+(XH[FAV] ? '<a class="xlink" href="https://x.com/'+XH[FAV]+'" target="_blank" rel="noopener">@'+XH[FAV]+' on X \u2197</a> \u00B7 ' : '')+'This tab is your favorite team\u2019s home, named after its arena. The favorite team is also highlighted across the dashboard and gets the roster card on League Leaders. The choice is kept in this browser; changing it reloads the page.</p></section>'+
     '<div id="hub-body"></div>';
-  el('hub-team').value = S.team;
+  el('hub-fav').value = FAV;
+  var tb = el('tab-hub'); if (tb){ tb.querySelector('.tl').textContent = ARENA_NAME; tb.querySelector('.ts').textContent = ARENA_NAME.replace(/^The /, ''); tb.setAttribute('aria-label', ARENA_NAME); }
 }
 function render(){
   var t = S.team, o = S.opp || nextOpp(t), sm = summary(t), up = MOD.upcoming(t, 8), res = resultsFor(t).slice(-10).reverse(), body = '';
-  S.opp = o; el('hub-opp').value = o; el('hub-h').innerHTML = '<span class="dotc big" style="background:'+tcol(t)+'"></span>'+(t === 'MEM' ? 'The Grindhouse' : esc(NAMES[t])+' hub');
-  el('hub-lede').textContent = (t === 'MEM' ? 'The Grizzlies\u2019 home base. ' : '')+'Everything about one team in one place: where it stands, who it plays next and how that matchup looks, recent results, the rotation, the lineups that work, and how the season has gone game by game. Data through '+LIB.fmtDay(L.asof, true)+' ('+L.games+' games).';
+  S.opp = o; el('hub-opp').value = o; el('hub-h').innerHTML = '<span class="dotc big" style="background:'+tcol(t)+'"></span>'+esc(ARENA_NAME);
+  el('hub-lede').textContent = 'Home of the '+esc(FULLN[t] || NAMES[t])+'. Everything about your favorite team in one place: where it stands, who it plays next and how that matchup looks, recent results, the rotation, the lineups that work, and how the season has gone game by game. Data through '+LIB.fmtDay(L.asof, true)+' ('+L.games+' games).';
   var kp = function(l, v, c){ return '<div class="hkpi"><div class="hl">'+l+'</div><div class="hv">'+v+'</div><div class="hc">'+c+'</div></div>'; };
   body += '<section class="card hubkpis">'+kp('Record', sm.w+'-'+sm.l, ord(sm.seed)+' in the '+sm.conf+'ern Conference')+kp('Net rating', LIB.sgn(sm.net), ord(sm.netRank)+' of 30 \u00B7 off '+f1(sm.ortg)+' / def '+f1(sm.drtg))+kp('Last 10', sm.last10[0]+'-'+sm.last10[1], (sm.streak > 0 ? 'Won ' : 'Lost ')+Math.abs(sm.streak)+' in a row')+kp('Home / road', sm.hw+'-'+sm.hl+' / '+sm.aw+'-'+sm.al, 'wins and losses')+'</section>';
   var nx = up[0];
@@ -3796,9 +3918,9 @@ function render(){
 function init(){
   if (!TD || !MOD){ el('view-hub').innerHTML = '<h1>The Grindhouse</h1><p>This tab needs data this build does not have. Upload the latest nba_build.py and template.html and run the workflow again.</p>'; return; }
   build(); render();
-  el('hub-team').addEventListener('change', function(e){ S.team = e.target.value; S.opp = null; render(); });
   el('hub-opp').addEventListener('change', function(e){ S.opp = e.target.value; render(); });
-  el('hub-body').addEventListener('change', function(e){ if (e.target.classList && e.target.classList.contains('lumode')) S.lumode = e.target.value; });
+  el('hub-fav').addEventListener('change', function(e){ if (window.NBA_SET_FAV) window.NBA_SET_FAV(e.target.value); location.hash = '#hub'; location.reload(); });
+  el('hub-body').addEventListener('click', function(e){ var b = e.target.closest ? e.target.closest('.lumode') : null; if (b) S.lumode = b.getAttribute('data-mode'); });
   el('hub-body').addEventListener('click', function(e){
     var tr = e.target.closest ? e.target.closest('tr[data-gid]') : null;
     if (tr && window.NBA_GAMES && !(e.target.closest && e.target.closest('[data-pid]'))) window.NBA_GAMES.open(+tr.getAttribute('data-gid'));
@@ -3894,7 +4016,7 @@ window.NBA_GAMES = {open:open, has:function(gid){ return !!BOX[gid]; }, shots:fu
 var LIB = window.NBA_LIB, L = LIB.L, el = LIB.el, esc = LIB.esc, TC = L.tcolors || {};
 var SNAP = L.snapshots;
 var AWARDS = [['mvp','MVP'],['dpoy','Defensive Player'],['roy','Rookie of the Year'],['smoy','Sixth Man'],['mip','Most Improved'],['clutch','Clutch Player']];
-var TOP = 5, S = {award:'mvp'};
+var TOP = 5, S = {award:'mvp', showOut:false};
 function teamOf(pid){ var p = L.players.filter(function(x){ return x[0] === pid; })[0]; return p ? p[2] : ''; }
 function colorOf(team){ var c = TC[team]; return c && /^[0-9a-f]{6}$/i.test(c[0]) ? '#'+c[0] : 'var(--muted)'; }
 function series(a){
@@ -3916,6 +4038,7 @@ function chart(a){
   var step = Math.max(1, Math.ceil(n / (narrow ? 4 : 8)));
   dates.forEach(function(d, i){ if (i % step === 0 || i === n - 1) s += '<text x="'+X(i).toFixed(1)+'" y="'+(H-12)+'" text-anchor="middle" font-size="11" style="fill:var(--muted)">'+LIB.fmtDay(d)+'</text>'; });
   ser.forEach(function(p){
+    if (!p.now && !S.showOut) return;
     var col = colorOf(p.team), d = '', open = false;
     p.rank.forEach(function(r, i){ if (r){ d += (open ? 'L' : 'M')+X(i).toFixed(1)+','+Y(r).toFixed(1)+' '; open = true; } else open = false; });
     s += '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="'+(p.now ? 3 : 1.6)+'" stroke-opacity="'+(p.now ? 0.95 : 0.45)+'" stroke-linejoin="round" stroke-linecap="round" class="trline" data-pid="'+p.pid+'"/>';
@@ -3926,10 +4049,11 @@ function chart(a){
 }
 function table(a){
   var ser = series(a), dates = SNAP.dates, n = dates.length;
-  var rows = ser.map(function(p){
+  var out = ser.filter(function(p){ return !p.now; }).length;
+  var rows = ser.filter(function(p){ return p.now || S.showOut; }).map(function(p){
     return '<tr'+(p.now ? '' : ' class="zero"')+'><td class="l"><span data-pid="'+p.pid+'" role="link" tabindex="0">'+esc(p.name)+'</span> <span class="smn">'+esc(p.team)+'</span></td><td>'+(p.now ? '#'+p.now : 'out')+'</td><td>#'+p.best+'</td><td>'+p.days+' of '+n+'</td><td class="l">'+LIB.fmtDay(dates[p.first])+'</td><td class="l">'+(p.now ? 'still in' : 'out since '+LIB.fmtDay(dates[Math.min(n-1, p.last+1)]))+'</td></tr>';
   }).join('');
-  return '<div class="scroll"><table class="stbl" id="tr-table"><thead><tr><th class="l">Player</th><th>Now</th><th>Best</th><th>Days in top 5</th><th class="l">First entered</th><th class="l">Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  return '<p class="checks"><label><input type="checkbox" id="tr-showout"'+(S.showOut ? ' checked' : '')+'> Show the '+out+' player'+(out === 1 ? '' : 's')+' who dropped out of the top 5</label></p><div class="scroll"><table class="stbl" id="tr-table"><thead><tr><th class="l">Player</th><th>Now</th><th>Best</th><th>Days in top 5</th><th class="l">First entered</th><th class="l">Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function render(){
   var a = S.award, label = AWARDS.filter(function(x){ return x[0] === a; })[0][1], n = SNAP.dates.length, ser = series(a), inNow = ser.filter(function(p){ return p.now; }).length, dropped = ser.length - inNow;
@@ -3945,6 +4069,7 @@ function init(){
   sec.innerHTML = '<h2 id="tr-title"></h2><p class="smn" id="tr-sub"></p><div class="presets" id="tr-chips" role="group" aria-label="Award">'+AWARDS.map(function(x){ return '<button type="button" class="chip" data-a="'+x[0]+'" aria-pressed="false">'+x[1]+'</button>'; }).join('')+'</div>'+
     '<div class="trwrap" id="tr-wrap"></div><p class="sr" id="tr-sr"></p><div id="tr-tbl"></div><p class="smn">Season in progress only. The tracker is rebuilt from scratch each day from the games played, so it never depends on what the page showed before; a change to a model changes its whole history.</p>';
   if (glance && glance.parentNode) glance.parentNode.insertBefore(sec, glance.nextSibling); else host.appendChild(sec);
+  el('tr-tbl').addEventListener('change', function(e){ if (e.target.id === 'tr-showout'){ S.showOut = e.target.checked; render(); } });
   el('tr-chips').addEventListener('click', function(e){ var b = e.target.closest ? e.target.closest('[data-a]') : null; if (b){ S.award = b.getAttribute('data-a'); render(); } });
   var hl = null;
   el('tr-wrap').addEventListener('pointerover', function(e){ var t = e.target.closest ? e.target.closest('[data-pid]') : null; var pid = t ? t.getAttribute('data-pid') : null; if (pid === hl) return; hl = pid; Array.prototype.forEach.call(document.querySelectorAll('#tr-svg .trline'), function(l){ l.style.strokeOpacity = pid ? (l.getAttribute('data-pid') === pid ? 1 : 0.15) : ''; }); });
@@ -4003,9 +4128,10 @@ function init(){
   el('view-about').innerHTML = '<h1>About</h1><div class="lhead"><p class="lede">How this dashboard works, how fresh it is, and how far to trust each piece of it.</p></div>'+
     '<section class="card aboutsec"><h2>Last data refresh</h2><p><b>Games through '+LIB.fmtDay(L.asof, true)+'</b> ('+L.games+' games played this season, no team past '+L.maxg+').</p>'+
       (built ? '<p>This page was built '+esc(new Date(built).toLocaleString('en-US', {dateStyle:'medium', timeStyle:'short'}))+' ('+age(built)+').</p>' : '<p>This build did not record when it was made.</p>')+
+      ((L.warnings || []).map(function(w){ return '<p class="warn">'+esc(w)+'</p>'; }).join(''))+
       (stale ? '<p class="warn">That is more than two days ago. If this is your own site, check that the daily update is running (the Actions tab of the repository).</p>' : '')+
       '<p class="smn">New games appear once the data source has published them, usually overnight or the next morning, and the daily update picks them up.</p></section>'+
-    '<section class="card aboutsec"><h2>What is here</h2><dl class="about"><dt>Shot Charts</dt><dd>Every tracked shot since 2022-23 by zone, with filters, comparisons and shot-profile twins.</dd><dt>League Leaders</dt><dd>Fourteen leaderboards and the Grizzlies roster.</dd><dt>Awards Watch</dt><dd>Top-5 candidates for six awards and projected All-NBA, All-Defensive and All-Rookie teams, from stat models, not votes, plus a day-by-day tracker of each race this season.</dd><dt>League Scoreboard</dt><dd>Every game day\u2019s scores with full box scores, score flow and shot maps, plus the standings.</dd><dt>Team Stats</dt><dd>Any two of 42 team statistics against each other, lineups and pairs, and defense shot charts.</dd><dt>Player Stats</dt><dd>Any two of about 40 player statistics against each other, including on/off ratings.</dd><dt>Projections</dt><dd>Projected wins and playoff odds, and how hard each team\u2019s schedule ahead is.</dd><dt>The Grindhouse</dt><dd>The Grizzlies\u2019 home base, and any other team\u2019s on request: standing, next game, matchup preview, results, rotation, lineups and season trend.</dd></dl></section>'+
+    '<section class="card aboutsec"><h2>What is here</h2><dl class="about"><dt>Shot Charts</dt><dd>Every tracked shot since 2022-23 by zone, with filters, comparisons and shot-profile twins.</dd><dt>League Leaders</dt><dd>Fourteen leaderboards and the Grizzlies roster.</dd><dt>Awards Watch</dt><dd>Top-5 candidates for six awards and projected All-NBA, All-Defensive and All-Rookie teams, from stat models, not votes, plus a day-by-day tracker of each race this season.</dd><dt>League Scoreboard</dt><dd>Every game day\u2019s scores with full box scores, score flow and shot maps, plus the standings.</dd><dt>Team Stats</dt><dd>Any two of 42 team statistics against each other, lineups and pairs, and defense shot charts.</dd><dt>Player Stats</dt><dd>Any two of about 40 player statistics against each other, including on/off ratings.</dd><dt>Projections</dt><dd>Projected wins and playoff odds, and how hard each team\u2019s schedule ahead is.</dd><dt>'+esc(window.NBA_ARENA_NAME || 'The Grindhouse')+'</dt><dd>Your favorite team\u2019s home, named after its arena: standing, next game, matchup preview, results, rotation, lineups and season trend.</dd></dl></section>'+
     '<section class="card aboutsec"><h2>How well the models reproduce history</h2><div id="ab-score"></div></section>'+
     (L.backtest && L.backtest.length ? '<section class="card aboutsec" id="ab-hist"><h2>The same models on every season since 2002-03</h2><p class="smn">The award models were tuned on 2022-23 to 2025-26. The seasons before that are a true out-of-sample test: the models never saw them. Each cell is where the real winner ranked (lower is better); the team columns are how many of the real selections the model\u2019s picks included.</p><div id="ab-hist-body"></div></section>' : '')+
     '<section class="card aboutsec"><h2>Things to keep in mind</h2><ul class="about"><li>Everything comes from ESPN play-by-play and box scores, republished by sportsdataverse. Shot locations are ESPN\u2019s, so totals will not match NBA.com exactly.</li><li>Shots farther than 40 feet, free throws, All-Star games and the NBA Cup final are left out of the shot totals.</li><li>The stand-ins for tracking data (catch-and-shoot style versus off the dribble) read ESPN\u2019s shot descriptions; they work best on threes. Screens, pick-and-roll and defender distance are not in this data at all.</li><li>On/off ratings and lineups are rebuilt from substitution records and used only for games where every player\u2019s rebuilt minutes agree with the box score (about 97% of games). They are noisy, especially early in a season.</li><li>Ratings are per 100 possessions with possessions estimated from the box score, so they will not match NBA.com to the decimal.</li><li>The projections ignore injuries, trades and tiebreaker rules, and the schedule data is missing the last two games per team.</li><li>Early in a season every list is a small sample and will keep reshuffling.</li>'+(window.NBA_ARCHIVE && window.NBA_ARCHIVE.keys().length ? '<li>Seasons before the last five are kept in separate files and load when you pick them (about 1 to 2 MB each) on the Shot Charts, Team Stats, Player Stats and defense-chart season menus. The Awards Watch, League Scoreboard, Projections and Grindhouse tabs cover the last five seasons only. Before 2017-18 ESPN\u2019s substitution records are too thin to rebuild lineups, so those seasons have no on/off or lineup figures; each season menu says so. Old franchises appear under today\u2019s codes (Seattle as OKC, New Jersey as BKN).</li>' : '')+'</ul></section>';

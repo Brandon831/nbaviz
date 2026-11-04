@@ -44,6 +44,8 @@ if len(gb) != leaders['games']: problems.append(f'box scores for {len(gb)} games
 elif any((not g[2]) or (not g[3]) or g[1] is None for g in gb): problems.append('some games have no box score or score-flow data')
 if not isinstance(leaders.get('remaining'), list): problems.append('the remaining schedule is missing')
 if not leaders.get('builtAt'): problems.append('the build time is missing')
+for w in leaders.get('warnings') or []: problems.append('WARNING: ' + w)
+if leaders.get('roster') is not None and len(leaders['roster'].get('roster', [])) < 13: problems.append('the Grizzlies roster has fewer than 13 players')
 sn = leaders.get('snapshots')
 if not sn or not sn.get('dates'): problems.append('the award tracker (snapshots) is missing')
 elif any(len(v) != len(sn['dates']) for v in sn['awards'].values()): problems.append('the award tracker has a different number of days per award')

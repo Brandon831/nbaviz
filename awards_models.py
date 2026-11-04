@@ -16,15 +16,17 @@ class Models:
         def src(k):
             if k in archive: return archive[k]['hist']
             return leaders if k == cur else leaders['hist'][k]
-        self.SEAS = {k: {'players': [dict(zip(F, a)) for a in src(k)['players']], 'tg': src(k)['tg'], 'maxg': src(k)['maxg']} for k in self.KEYS}
+        self.SEAS = {k: {'players': [dict(zip(F, a)) for a in src(k)['players']], 'tg': src(k)['tg'], 'maxg': src(k)['maxg'], 'pos': src(k).get('pos', {})} for k in self.KEYS}
+        self.use_rep = True
         self.TEAMS = {k: (archive[k]['teams'] if k in archive else leaders['teams'][k]) for k in self.KEYS}
+        self.ONOFF = {k: (archive[k].get('onoff') if k in archive else (leaders.get('onoff') or {}).get(k)) or {} for k in self.KEYS}
         self.STAND = {k: (archive[k]['shot']['stand'] if k in archive else shot['seasons'][k]['stand']) for k in self.KEYS}
         self.TD = {k: self._tdef(k) for k in self.KEYS}
         self.cur = cur
     # ---- helpers
     @staticmethod
     def gs(p): return p['pts']+0.4*p['fgm']-0.7*p['fga']-0.4*(p['fta']-p['ftm'])+0.7*p['oreb']+0.3*p['dreb']+p['stl']+0.7*p['ast']+0.7*p['blk']-0.4*p['pf']-p['tov']
-    def gp_ok(self, p, S): return p['gp'] >= max(1, math.ceil(0.7 * S['tg'].get(p['team'], S['maxg'])))
+    def gp_ok(self, p, S): return p['pid'] != 99999999 and p['gp'] >= max(1, math.ceil(0.7 * S['tg'].get(p['team'], S['maxg'])))
     def prev_keys(self, k): i = self.KEYS.index(k); return self.KEYS[max(0, i-3):i][::-1]
     def record(self, k, team): s = self.STAND[k].get(team); return (s['w'], s['l']) if s else (0, 0)
     def team_T(self, k, team, blend):
@@ -53,9 +55,35 @@ class Models:
     def mvp(self, k, blend=True):
         S = self.SEAS[k]; f = self.blended(k, lambda kk, p: self.gs(p)/p['gp'], blend, 8.0)
         return self.sort_out([{'p': p, 'score': f(p) + BETA*(100*self.team_T(k, p['team'], blend) - 50)} for p in S['players'] if self.gp_ok(p, S) and p['min']/p['gp'] >= 25])
+    def past_alldef(self, k, pid):
+        """was the player on an All-Defensive team in any of the three previous seasons"""
+        for j in (1, 2, 3):
+            if any(q == pid and t in ('ad1', 'ad2') for q, t in self.AW.get(str(int(k) - j), [])): return 1
+        return 0
+    def rim(self, k, pid):
+        o = self.ONOFF[k].get(str(pid))
+        if not o or len(o) < 17 or o[11] < 50 or o[14] < 50: return [0.0, 0.0]
+        w = o[1] / (o[1] + 500 * 60.0); return [(o[15]/o[14] - o[12]/o[11]) * w, ((o[16]/max(o[15], 1)) - (o[13]/max(o[12], 1))) * w]
+    def has_rim(self, k):
+        for o in self.ONOFF[k].values(): return len(o) >= 17
+        return False
     def dscore(self, k, p):
-        x = {'blk': p['blk']/p['gp'], 'stl': p['stl']/p['gp'], 'dreb': p['dreb']/p['gp'], 'mpg': p['min']/p['gp'], 'tdef': self.TD[k].get(p['team'], 0.0)}
-        D = self.DEF; return sum(w*(x[c]-m)/s for c, m, s, w in zip(D['cols'], D['mu'], D['sd'], D['w']))
+        x = {'blk': p['blk']/p['gp'], 'stl': p['stl']/p['gp'], 'dreb': p['dreb']/p['gp'], 'mpg': p['min']/p['gp'], 'tdef': self.TD[k].get(p['team'], 0.0), 'rep': self.past_alldef(k, p['pid'])}
+        if self.use_rep and 'rep' in self.DEF['cols']: D = self.DEF
+        elif 'stats_rim' in self.DEF and self.has_rim(k): D = self.DEF['stats_rim']; x['rimds'], x['rimdfg'] = self.rim(k, p['pid'])
+        else: D = self.DEF.get('stats', self.DEF)
+        return sum(w*(x[c]-m)/s for c, m, s, w in zip(D['cols'], D['mu'], D['sd'], D['w']))
+    def alldef(self, k, blend=False):
+        """two guards, two forwards and a center per team through 2022-23 (the voting rule then); the ten best regardless of position from 2023-24"""
+        lst = self.dpoy(k, blend)
+        if int(k) > 2023: return lst[:10]
+        pos = self.SEAS[k].get('pos', {}); teams = [{'G': 2, 'F': 2, 'C': 1}, {'G': 2, 'F': 2, 'C': 1}]; out = [[], []]
+        for r in lst:
+            g = pos.get(str(r['p']['pid']), 'F')
+            for t in (0, 1):
+                if teams[t][g] > 0: out[t].append(r); teams[t][g] -= 1; break
+            if len(out[0]) + len(out[1]) == 10: break
+        return out[0] + out[1]
     def dpoy(self, k, blend=False):
         S = self.SEAS[k]; f = self.blended(k, self.dscore, blend, 0.0)
         return self.sort_out([{'p': p, 'score': f(p)} for p in S['players'] if self.gp_ok(p, S) and p['min']/p['gp'] >= 20])
@@ -111,7 +139,7 @@ class Models:
             r = {'k': k, 'mvp': self.rank_of(self.mvp(k), self.winner(k, 'mvp')), 'dpoy': self.rank_of(self.dpoy(k), self.winner(k, 'dpoy')),
                  'smoy': self.rank_of(self.smoy(k), self.winner(k, 'smoy')),
                  'roy': None if first else self.rank_of(self.roy(k), self.winner(k, 'roy')), 'mip': None if first else self.rank_of(self.mip(k, fit), self.winner(k, 'mip')),
-                 'an': self.team_hits(self.mvp(k)[:15], k, ['an1', 'an2', 'an3']), 'ad': self.team_hits(self.dpoy(k)[:10], k, ['ad1', 'ad2']),
+                 'an': self.team_hits(self.mvp(k)[:15], k, ['an1', 'an2', 'an3']), 'ad': self.team_hits(self.alldef(k), k, ['ad1', 'ad2']),
                  'ar': None if first else self.team_hits(self.roy(k, 0.5)[:10], k, ['ar1', 'ar2']),
                  'winners': {t: self.winner(k, t) for t in ('mvp', 'dpoy', 'roy', 'smoy', 'mip')}}
             rows.append(r)

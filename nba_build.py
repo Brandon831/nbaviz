@@ -200,7 +200,7 @@ def build_season(raw, y, names, cup_id):
         m = (shooter == t)
         off[t] = {'reg': [np.bincount(zone[m & (po == 0)], minlength=14).tolist(), np.bincount(zone[m & (po == 0) & (made == 1)], minlength=14).tolist()],
                   'po':  [np.bincount(zone[m & (po == 1)], minlength=14).tolist(), np.bincount(zone[m & (po == 1) & (made == 1)], minlength=14).tolist()]}
-    s = s.assign(val=val, ex=ex, po=po, pid=s.athlete_id_1.astype(int), gid=s.game_id.astype(np.int64))
+    s = s.assign(val=val, ex=ex, po=po, pid=s.athlete_id_1.astype(int), gid=s.game_id.astype(np.int64), zone=zone, made=made)
     for pid, nm in s[['pid', 'athlete_name_1']].drop_duplicates('pid').itertuples(index=False): names[int(pid)] = nm
     team = s.groupby('pid').team_id.agg(lambda x: x.value_counts().index[0]).map(tm)
     pl = []; chunks = []; xchunks = []; gchunks = []
@@ -209,6 +209,25 @@ def build_season(raw, y, names, cup_id):
         r = g.val.values[m0]; p = g.val.values[m1]
         pl.append([int(pid), str(team[pid]), int(len(r)), int(len(p)), int(gp.get((int(pid), 0), 0)), int(gp.get((int(pid), 1), 0)), 1 if int(pid) in cupP else 0])
         chunks += [r, p]; xchunks += [g.ex.values[m0], g.ex.values[m1]]; gchunks += [g.gid.values[m0], np.full(int(m1.sum()), -1, dtype=np.int64)]
+    if ADD_AVG and pl:
+        reg = s[s.po == 0].sort_values(['game_id']); po_ = s[s.po == 1].sort_values(['game_id']); npl = len(pl)
+        n_reg = int(round(len(reg) / npl)); n_po = int(round(len(po_) / npl))
+        def sample(df, n):
+            """a stratified sample: every zone, makes and misses separately, gets its share of the n shots (largest remainder), each stratum thinned evenly"""
+            if n <= 0 or not len(df): return np.zeros(0, dtype=np.uint16), np.zeros(0, dtype=np.uint16)
+            groups = [(k, g) for k, g in df.groupby(['zone', 'made'], sort=True)]
+            exact = [n * len(g) / len(df) for _, g in groups]; base = [int(math.floor(x)) for x in exact]; short = n - sum(base)
+            order = sorted(range(len(groups)), key=lambda i: -(exact[i] - base[i]))
+            for i in order[:short]: base[i] += 1
+            vals = []; exs = []
+            for (_, g), m in zip(groups, base):
+                if m <= 0: continue
+                ix = np.linspace(0, len(g) - 1, m).round().astype(int); vals.append(g.val.values[ix]); exs.append(g.ex.values[ix])
+            out = pd.DataFrame({'v': np.concatenate(vals), 'x': np.concatenate(exs)}); return out.v.values, out.x.values
+        rv, rx = sample(reg, n_reg); pv, px = sample(po_, n_po)
+        gr_avg = int(round(sum(p[4] for p in pl) / npl)); gp_avg = int(round(sum(p[5] for p in pl) / npl))
+        pl.append([AVG_PID, 'NBA', int(len(rv)), int(len(pv)), gr_avg, gp_avg, 0]); names[AVG_PID] = AVG_NAME
+        chunks += [rv, pv]; xchunks += [rx, px]; gchunks += [np.full(len(rv), -1, dtype=np.int64), np.full(len(pv), -1, dtype=np.int64)]
     arr = np.concatenate(chunks).astype('<u2'); xarr = np.concatenate(xchunks).astype('<u2')
     assert len(arr) == len(xarr)
     return {'stand': stand, 'lead': lead, 'cup': cup, 'games': games, 'asof': asof, 'label': f'{y-1}-{str(y)[2:]}', 'pl': pl,
@@ -231,7 +250,11 @@ def box_players(raw, y, cup_id):
     a['gst'] = act[act.starter == True].groupby('athlete_id').game_id.nunique().reindex(a.index).fillna(0).astype(int)
     last = g.tail(1).set_index('athlete_id'); a['name'] = last.athlete_display_name; a['team'] = last.team_abbreviation
     players = [[int(pid), r['name'], r['team'], int(r['gp'])] + [round(float(r[c]), 1) if c == 'minutes' else int(r[c]) for c in COLS] + [int(r['gst'])] for pid, r in a.iterrows()]
-    return {'asof': asof, 'games': games, 'maxg': int(max(tg.values())), 'tg': tg, 'players': players}, d
+    if ADD_AVG and players:
+        act_rows = [p for p in players if p[3] > 0]; n = len(act_rows)
+        avg = [AVG_PID, AVG_NAME, 'NBA', max(1, int(round(sum(p[3] for p in act_rows) / n)))] + [round(sum(p[i] for p in act_rows) / n, 2) for i in range(4, len(players[0]))]
+        players.append(avg)
+    return {'asof': asof, 'games': games, 'maxg': int(max(tg.values())), 'tg': tg, 'players': players, 'pos': {str(k): v for k, v in positions(d).items()}}, d
 
 def team_ratings(d):
     act = d[(d.did_not_play == False) & d.minutes.notna()]
@@ -277,6 +300,10 @@ def clutch_sum(c):
 
 # ----------------------------------------------------------------------------- game-by-game team rows (Team stats tab)
 BUILT_AT = None
+ARGS = None
+AVG_PID = 99999999   # Armando "NBA" Venegas: the average of every player with data in the season (embedded seasons only); never a real ESPN id
+AVG_NAME = 'Armando "NBA" Venegas'
+ADD_AVG = False
 TEAMS30 = sorted(TEAM_DIV)
 TG_WIDTH = 42     # per game: date index, home team, away team, minutes, then each team's 19 numbers (box totals, then shots by zone group)
 TG_COLS = ['points', 'field_goals_made', 'field_goals_attempted', 'three_point_field_goals_made', 'three_point_field_goals_attempted', 'free_throws_made',
@@ -304,8 +331,98 @@ def team_games(raw, y, d, shotgrp):
     assert arr.shape[1] == TG_WIDTH and arr.max() < 65536 and arr.min() >= 0
     return {'teams': TEAMS30, 'dates': dates, 'w': TG_WIDTH, 'd': base64.b64encode(arr.astype('<u2').tobytes()).decode(), '_gids': [r[1] for r in rows]}
 
+# ----------------------------------------------------------------------------- Grizzlies roster from ESPN's public feed (falls back to static/roster.json)
+ESPN_ROSTER_URL = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/mem/roster'
+def roster_from_espn(static_roster):
+    """The current roster and coach from ESPN's team feed. Two-way flags come from static/roster.json (matched by player id), since the feed does not
+    mark them reliably. Returns None, and the build keeps the static file, if the feed cannot be read or looks incomplete."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(urllib.request.Request(ESPN_ROSTER_URL, headers={'User-Agent': 'nba-dashboard'}), timeout=20) as r: j = json.load(r)
+        tw = {int(p['pid']): int(p.get('tw', 0)) for p in static_roster.get('roster', [])}
+        out = []
+        for ath in j.get('athletes', []):
+            pid = int(ath['id']); exp = ath.get('experience', {}).get('years'); col = ath.get('college', {}).get('name') if isinstance(ath.get('college'), dict) else None
+            out.append({'n': int(ath['jersey']) if str(ath.get('jersey', '')).isdigit() else None, 'name': ath.get('displayName'), 'pid': pid,
+                        'pos': (ath.get('position') or {}).get('abbreviation'), 'ht': ath.get('displayHeight'), 'wt': ath.get('weight'),
+                        'bd': (ath.get('dateOfBirth') or '')[:10] or None, 'exp': 'R' if exp in (0, None) else str(exp), 'col': [col] if col else [], 'tw': tw.get(pid, 0)})
+        if len(out) < 13: return None
+        coach = None
+        c = j.get('coach') or []
+        if c: coach = (c[0].get('firstName', '') + ' ' + c[0].get('lastName', '')).strip() or None
+        print(f'roster: {len(out)} players from ESPN' + (f', coach {coach}' if coach else ''), file=sys.stderr)
+        return {'coach': coach or static_roster.get('coach'), 'rosterAsOf': dt.date.today().isoformat(), 'roster': out, 'source': 'espn'}
+    except Exception as e:
+        print('roster: ESPN feed not used (' + str(e)[:80] + '); keeping static/roster.json', file=sys.stderr); return None
+
+# ----------------------------------------------------------------------------- positions (guard / forward / center), for the All-Defensive slots
+POS_GROUP = {'PG': 'G', 'SG': 'G', 'G': 'G', 'SF': 'F', 'PF': 'F', 'F': 'F', 'GF': 'F', 'C': 'C', 'FC': 'C'}
+LAST_POS = {}
+def positions(d):
+    """{player id: 'G' | 'F' | 'C'} from the box scores' position labels; a missing label falls back to the player's last known group, then forward."""
+    out = {}
+    if 'athlete_position_abbreviation' in d.columns:
+        lab = d.dropna(subset=['athlete_position_abbreviation']).drop_duplicates('athlete_id')
+        for pid, p in zip(lab.athlete_id, lab.athlete_position_abbreviation):
+            g = POS_GROUP.get(str(p));
+            if g: out[int(pid)] = g
+    for pid in d.athlete_id.dropna().unique():
+        pid = int(pid)
+        if pid not in out: out[pid] = LAST_POS.get(pid, 'F')
+    LAST_POS.update(out); return out
+
 # ----------------------------------------------------------------------------- lineups and on/off ratings (rebuilt from substitutions)
 TOV_RE = re.compile(r'Turnover|Traveling|Kicked Ball|^Lane$|Double Lane')
+def resolve_subs(events, starters, roster, boxmin, tol):
+    """events: [(period, clock_sec, team, pin, pout)] with None for a missing id. Tries every way of filling the gaps (the player leaving must be one
+    of the five on the floor; the player entering must be a teammate not on the floor) and keeps the one whose rebuilt minutes agree with the box score.
+    Returns the filled events, or None when no filling works or there are too many gaps."""
+    gaps = [i for i, e in enumerate(events) if e[3] is None or e[4] is None]
+    if not gaps: return events
+    import itertools
+    def minutes(evs):
+        on = {t: set(v) for t, v in starters.items()}; sec = {}; curper = None; tprev = 0.0
+        for p_, t_, team, pin, pout in [(e[0], e[1], e[2], e[3], e[4]) for e in evs if e is not None] + [(None, None, None, None, None)]:
+            if p_ != curper:
+                if curper is not None:
+                    for tm in on:
+                        for q in on[tm]: sec[q] = sec.get(q, 0.0) + tprev
+                if p_ is None: break
+                curper = p_; tprev = 720.0 if p_ <= 4 else 300.0
+            dt = tprev - t_
+            for tm in on:
+                for q in on[tm]: sec[q] = sec.get(q, 0.0) + dt
+            tprev = t_
+            if pout not in on[team] or pin in on[team]: return None
+            on[team].discard(pout); on[team].add(pin)
+        return sec
+    def options(i, evs_so_far):
+        p_, t_, team, pin, pout = events[i]
+        # who is on the floor just before this event, given the fills chosen so far
+        on = set(starters[team])
+        for e in evs_so_far[:i]:
+            if e is not None and e[2] == team: on.discard(e[4]); on.add(e[3])
+        outs = [pout] if pout is not None else sorted(on)
+        ins = [pin] if pin is not None else sorted(roster[team] - on)
+        # a partial event is sometimes a duplicate of a complete one logged at the same moment: dropping it is an option too
+        return [None] + [(a, b) for b in outs for a in ins]
+    best = None; tried = 0
+    def search(i, evs):
+        nonlocal best, tried
+        if tried > 4000: return
+        if i == len(gaps):
+            tried += 1; sec = minutes(evs)
+            if sec is None: return
+            worst = max(abs(sec.get(p, 0.0) / 60.0 - boxmin.get(p, 0.0)) for p in set(sec) | set(boxmin))
+            if worst <= tol and (best is None or worst < best[0]): best = (worst, list(evs))
+            return
+        gi = gaps[i]
+        for opt in options(gi, evs):
+            e = events[gi]; evs[gi] = None if opt is None else (e[0], e[1], e[2], opt[0], opt[1]); search(i + 1, evs)
+        evs[gi] = events[gi]
+    search(0, list(events))
+    return best[1] if best else None
+
 def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True):
     """Who was on the floor, rebuilt from substitution events, starting from the box-score starters.
     A game is used only if every lineup stays at exactly five players and every player's rebuilt minutes agree with the box score (within 1.5 minutes);
@@ -314,9 +431,9 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
     size = os.path.getsize(fetch(raw, 'pbp', y))
     if use_cache and y != CURRENT and not keep_games and os.path.exists(cache):
         c = json.load(open(cache))
-        if c.get('pbp_size') == size and c.get('v') == 4: return c['data']
+        if c.get('pbp_size') == size and c.get('v') == 6: return c['data']
     cols = ['game_id','sequence_number','period_number','clock_minutes','clock_seconds','type_text','athlete_id_1','athlete_id_2','team_id','home_team_id','away_team_id',
-            'home_team_abbrev','away_team_abbrev','home_score','away_score','shooting_play','season_type']
+            'home_team_abbrev','away_team_abbrev','home_score','away_score','shooting_play','scoring_play','coordinate_x','coordinate_y','season_type']
     d = readp(fetch(raw, 'pbp', y), columns=cols)
     gm = d.drop_duplicates('game_id'); bad = set(gm[~(gm.home_team_abbrev.isin(STD) & gm.away_team_abbrev.isin(STD))].game_id)
     d = d[~d.game_id.isin(bad) & (d.season_type == 2)]
@@ -326,6 +443,8 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
     act = box_d[(box_d.did_not_play == False) & box_d.minutes.notna()]
     starters = {(int(g), int(t)): [int(x) for x in grp.athlete_id] for (g, t), grp in act[act.starter == True].groupby(['game_id', 'team_id'])}
     boxmin = {(int(g), int(p)): float(m) for g, p, m in zip(act.game_id, act.athlete_id, act.minutes)}
+    roster = {(int(g), int(t)): set(int(x) for x in grp.athlete_id) for (g, t), grp in act.groupby(['game_id', 'team_id'])}
+    repaired = 0
     abbr = {}
     for a, b_ in (('home_team_id', 'home_team_abbrev'), ('away_team_id', 'away_team_abbrev')):
         for i, n in d[[a, b_]].drop_duplicates().itertuples(index=False): abbr[int(i)] = n
@@ -335,6 +454,13 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
     is_oreb = (tt == 'Offensive Rebound') & has1
     is_tov = np.array([bool(TOV_RE.search(x)) for x in tt]) & has1
     comp = np.where(is_fga, 1.0, np.where(is_ft, 0.44, np.where(is_oreb, -1.0, np.where(is_tov, 1.0, 0.0))))
+    # which field-goal attempts are at the rim (the page's restricted-area zone), and which went in: for the rim-deterrence signal
+    cxr = d.coordinate_x.values.astype(float); cyr = d.coordinate_y.values.astype(float)
+    with np.errstate(invalid='ignore'):
+        sgn = np.where(cxr < 0, -1.0, 1.0); u_ = cyr * sgn; v_ = 47.0 - np.abs(cxr)
+        ucol = np.clip(np.round(np.nan_to_num(u_) + 50).astype(int), 0, 100); vrow = np.clip(np.round(np.nan_to_num(v_) * 2).astype(int), 0, 94)
+    is_rim = is_fga & ~np.isnan(cxr) & (LUT[0, ucol, vrow] == 0)
+    is_make = (d.scoring_play.values == True)
     gid = d.game_id.values; per = d.period_number.values; clk = (d.clock_minutes.values * 60 + d.clock_seconds.values)
     tid = d.team_id.values; a1 = d.athlete_id_1.values; a2 = d.athlete_id_2.values; hs = d.home_score.values; as_ = d.away_score.values
     hid_all = d.home_team_id.values; aid_all = d.away_team_id.values
@@ -344,8 +470,23 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
         lo, hi = bounds[bi], bounds[bi + 1]; g = int(gid[lo]); total += 1
         h, a = int(hid_all[lo]), int(aid_all[lo])
         if (g, h) not in starters or (g, a) not in starters or len(starters[(g, h)]) != 5 or len(starters[(g, a)]) != 5: continue
+        # substitutions with a missing player id: infer them from the box score (see resolve_subs); patch the id arrays for this game only
+        sub_idx = [i for i in range(lo, hi) if is_sub[i]]
+        if any(not (a1[i] == a1[i]) or not (a2[i] == a2[i]) for i in sub_idx):
+            if (g, h) not in roster or (g, a) not in roster: continue
+            evs = [(int(per[i]), float(min(max(clk[i] if clk[i] == clk[i] else 0.0, 0.0), 720.0 if per[i] <= 4 else 300.0)), int(tid[i]) if tid[i] == tid[i] else -1,
+                    int(a1[i]) if a1[i] == a1[i] else None, int(a2[i]) if a2[i] == a2[i] else None) for i in sub_idx]
+            if any(e[2] not in (h, a) for e in evs): continue
+            filled = resolve_subs(evs, {h: starters[(g, h)], a: starters[(g, a)]}, {h: roster[(g, h)], a: roster[(g, a)]},
+                                  {p: m for (gg, p), m in boxmin.items() if gg == g}, tol)
+            if filled is None: continue
+            a1 = a1.copy(); a2 = a2.copy()
+            for i, e in zip(sub_idx, filled):
+                if e is None: is_sub[i] = False
+                else: a1[i] = e[3]; a2[i] = e[4]
+            repaired += 1
         on = {h: set(starters[(g, h)]), a: set(starters[(g, a)])}; cur = {h: tuple(sorted(on[h])), a: tuple(sorted(on[a]))}; acc = {h: {}, a: {}}
-        def vec(t): return acc[t].setdefault(cur[t], [0.0, 0.0, 0.0, 0.0, 0.0])
+        def vec(t): return acc[t].setdefault(cur[t], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         ok = True; curper = None; tprev = 720.0; ph = pa = 0; elapsed0 = 0.0; marks = []
         for i in range(lo, hi):
             p_ = int(per[i])
@@ -373,6 +514,9 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
                 t = int(tid[i])
                 if t in acc:
                     o = a if t == h else h; vec(t)[3] += c; vec(o)[4] += c
+                    if is_fga[i]:
+                        vo = vec(o); vo[5] += 1
+                        if is_rim[i]: vo[6] += 1; vo[7] += 1 if is_make[i] else 0
             if is_sub[i]:
                 t = int(tid[i]) if tid[i] == tid[i] else -1
                 pin = a1[i]; pout = a2[i]
@@ -395,21 +539,23 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
         if worst > tol: continue
         clean += 1; errs.append(worst)
         for t in (h, a):
-            T = [0.0] * 5
+            T = [0.0] * 8
             for key, v in acc[t].items():
-                for k in range(5): T[k] += v[k]
+                for k in range(8): T[k] += v[k]
                 L = lineups.setdefault((abbr[t], key), [0.0] * 6)
                 for k in range(5): L[k] += v[k]
                 L[5] += 1
             mine = {}
             for key, v in acc[t].items():
                 for p in key:
-                    m = mine.setdefault(p, [0.0] * 5)
-                    for k in range(5): m[k] += v[k]
+                    m = mine.setdefault(p, [0.0] * 8)
+                    for k in range(8): m[k] += v[k]
             for p, m in mine.items():
-                o = onoff.setdefault(p, [0] + [0.0] * 10)
+                # [games, on: sec, pts for, pts against, poss for, poss against, off: the same five, then on: opp FGA, rim FGA, rim FGM, off: the same three]
+                o = onoff.setdefault(p, [0] + [0.0] * 16)
                 o[0] += 1
                 for k in range(5): o[1 + k] += m[k]; o[6 + k] += T[k] - m[k]
+                for k in range(3): o[11 + k] += m[5 + k]; o[14 + k] += T[5 + k] - m[5 + k]
                 if keep_games: pm_all.setdefault(g, {})[p] = round(m[1] - m[2])
         if keep_games:
             fl = []; k = 0; mk = marks
@@ -433,12 +579,12 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
             rows.sort(key=lambda r: -r[1][0])
             out[team] = [list(k[1:]) + [round(x, 1) for x in v[:5]] + ([int(v[5])] if len(v) > 5 else []) for k, v in rows[:n]]
         return out
-    res = {'coverage': [clean, total], 'maxerr': round(float(np.max(errs)), 2) if errs else None,
+    res = {'coverage': [clean, total], 'repaired': repaired, 'maxerr': round(float(np.max(errs)), 2) if errs else None,
            'onoff': {str(p): [int(o[0])] + [round(x, 2) for x in o[1:]] for p, o in onoff.items()},
            'lineups': top(lineups, 15), 'pairs': top(pairs, 15)}
     if keep_games: res['pm'] = {str(g): v for g, v in pm_all.items()}; res['flows'] = {str(g): v for g, v in flows.items()}
     if use_cache and y != CURRENT and not keep_games:
-        json.dump({'v': 4, 'pbp_size': size, 'data': res}, open(cache, 'w'), separators=(',', ':'))
+        json.dump({'v': 6, 'pbp_size': size, 'data': res}, open(cache, 'w'), separators=(',', ':'))
     return res
 
 def flows_data(raw, y, cup_id):
@@ -513,7 +659,7 @@ def award_snapshots(raw, y, d, cup_id, shot, leaders, awards, defmodel, top_n=8)
         a['gst'] = cut[cut.starter == True].groupby('athlete_id').game_id.nunique().reindex(a.index).fillna(0).astype(int)
         last = g.tail(1).set_index('athlete_id'); a['name'] = last.athlete_display_name; a['team'] = last.team_abbreviation
         players = [[int(pid), r['name'], r['team'], int(r['gp'])] + [float(r[c]) for c in COLS] + [int(r['gst'])] for pid, r in a.iterrows()]
-        M.SEAS[cur] = {'players': [dict(zip(awards_models.F, p)) for p in players], 'tg': tg, 'maxg': int(max(tg.values()))}
+        M.SEAS[cur] = {'players': [dict(zip(awards_models.F, p)) for p in players], 'tg': tg, 'maxg': int(max(tg.values())), 'pos': leaders.get('pos', {})}
         games = cut.drop_duplicates(['game_id', 'team_abbreviation'])
         M.STAND[cur] = {t: {'w': int(x.team_winner.sum()), 'l': int((~x.team_winner.astype(bool)).sum())} for t, x in games.groupby('team_abbreviation')}
         M.TEAMS[cur] = team_ratings(d[d.game_date.astype(str) <= D]); M.TD[cur] = M._tdef(cur)
@@ -619,6 +765,8 @@ def team_colors(d):
     return out
 
 def build_blocks(raw, refresh_current=True):
+    global ADD_AVG
+    ADD_AVG = True
     cups = {y: cup_game_id(raw, y) for y in SEASONS}
     print('cup championship games:', cups, file=sys.stderr)
     names = {}; seasons = {}; hist = {}; teams = {}; clutch = {}; tgames = {}; onoff = {}; lineups = {}; pairs = {}; lcov = {}; cur = None; cur_d = None; gbox = None; gx = None
@@ -640,6 +788,9 @@ def build_blocks(raw, refresh_current=True):
         else: hist[k] = L
     static = os.path.join(HERE, 'static')
     roster = json.load(open(os.path.join(static, 'roster.json')))
+    if not getattr(ARGS, 'no_espn_roster', False):
+        live = roster_from_espn(roster)
+        if live: roster = live
     allids = {norm_name(r.athlete_display_name): int(r.athlete_id) for r in cur_d.drop_duplicates('athlete_id').itertuples()}
     for r in roster['roster']:
         if r.get('pid') is None:
@@ -648,20 +799,22 @@ def build_blocks(raw, refresh_current=True):
     mem = cur_d[cur_d.team_abbreviation == 'MEM'].drop_duplicates('game_id')
     record = [int(mem.team_winner.sum()), int((~mem.team_winner.astype(bool)).sum())]
     hp = {k: hist[k]['players'] for k in hist}; hs = {k: seasons[k]['stand'] for k in hist}
-    leaders = {'key': str(CURRENT), 'asof': cur['asof'], 'games': cur['games'], 'maxg': cur['maxg'], 'tg': cur['tg'], 'players': cur['players'],
+    leaders = {'key': str(CURRENT), 'asof': cur['asof'], 'games': cur['games'], 'maxg': cur['maxg'], 'tg': cur['tg'], 'players': cur['players'], 'pos': cur.get('pos', {}),
                'hist': hist, 'mem': {'record': record, 'coach': roster['coach'], 'roster': roster['roster'], 'rosterAsOf': roster['rosterAsOf']},
                'teams': teams, 'tgames': tgames, 'tcolors': team_colors(cur_d), 'onoff': onoff, 'lineups': lineups, 'pairs': pairs, 'lcov': lcov, 'gbox': gbox, 'remaining': remaining_games(raw, CURRENT), 'builtAt': BUILT_AT, 'clutch': clutch, 'race': mvp_race(cur_d, hp, hs), 'sched': games_table(raw, CURRENT)}
     shot = {'names': {str(k): v for k, v in names.items()}, 'seasons': seasons}
     return shot, leaders
 
 # ----------------------------------------------------------------------------- archived seasons (one file each, loaded by the page on demand)
-ARCHIVE_VERSION = 2
+ARCHIVE_VERSION = 6
 def season_payload(raw, y):
     """Everything the page needs for one finished season, as one JSON-ready object. Cached in raw/ because finished seasons never change."""
     cache = os.path.join(raw, f'season{y}.json')
     if os.path.exists(cache):
         c = json.load(open(cache))
         if c.get('v') == ARCHIVE_VERSION: return c['data']
+    global ADD_AVG
+    ADD_AVG = True
     cup = cup_game_id(raw, y); names = {}
     s = build_season(raw, y, names, cup); L, d = box_players(raw, y, cup)
     tg = team_games(raw, y, d, s.pop('_grp')); tg.pop('_gids', None); s.pop('_gid', None)
@@ -676,7 +829,8 @@ def build_archive(raw, first_year, out_dir, url_of):
     os.makedirs(out_dir, exist_ok=True); manifest = {}
     for y in range(first_year, SEASONS[0]):
         p = season_payload(raw, y); path = os.path.join(out_dir, f'season-{y}.json')
-        json.dump(p, open(path, 'w'), separators=(',', ':'))
+        slim = dict(p); slim['hist'] = {k: v for k, v in p['hist'].items() if k != 'pos'}   # positions are only needed by the build's own backtest
+        json.dump(slim, open(path, 'w'), separators=(',', ':'))
         sch = readp(fetch(raw, 'sched', y)); scheduled = int((sch.season_type == 2).sum()) if 'season_type' in sch.columns else len(sch)
         bg = p['hist']['games']; lc = p['lcov']
         manifest[str(y)] = {'label': p['shot']['label'], 'games': p['shot']['games'], 'boxGames': bg, 'scheduled': scheduled, 'lineups': round(lc[0] / lc[1], 3) if lc[1] else 0,
@@ -700,13 +854,15 @@ def main():
     ap.add_argument('--data-only', default=None, help='write the two data blocks as JSON files into this folder instead of the page')
     ap.add_argument('--template', default=os.path.join(HERE, 'template.html'))
     ap.add_argument('--built-at', default=None, help='timestamp to record in the page (defaults to now, in UTC); fixed for reproducible test builds')
+    ap.add_argument('--no-espn-roster', action='store_true', help='do not fetch the Grizzlies roster from ESPN; use static/roster.json as is')
     ap.add_argument('--no-refresh', action='store_true', help='do not re-download the season in progress (for testing)')
     ap.add_argument('--history', type=int, default=None, help='also build one data file per finished season back to this end-year (2004 = 2003-04), for the page to load on demand')
     ap.add_argument('--archive-dir', default=None, help='where the season files go (default: a data/ folder beside the page)')
     ap.add_argument('--archive-urls', default=None, help='JSON file mapping end-year to the URL the page should fetch, when the files are hosted elsewhere (default: data/season-<year>.json beside the page)')
     ap.add_argument('--current', type=int, default=None, help='year the current season ends (2027 = 2026-27); the five most recent seasons are built')
     a = ap.parse_args()
-    global CURRENT, SEASONS, BUILT_AT
+    global CURRENT, SEASONS, BUILT_AT, ARGS
+    ARGS = a
     BUILT_AT = a.built_at or dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     if a.current:
         CURRENT = a.current; SEASONS = list(range(CURRENT - 4, CURRENT + 1))
@@ -724,6 +880,16 @@ def main():
         M = awards_models.Models(shot, leaders, payloads, awards, json.load(open(os.path.join(HERE, 'static', 'defmodel.json'))))
         leaders['mipfit'] = M.mip_fit(); leaders['backtest'] = M.backtest(leaders['mipfit'])
         print(f"Most Improved regression on {leaders['mipfit']['seasons']} seasons: {leaders['mipfit']['a']:+.3f} {leaders['mipfit']['b']:+.4f} x last-year Game Score; scorecard rows: {len(leaders['backtest'])}", file=sys.stderr)
+    leaders['warnings'] = []
+    try:
+        sch = readp(fetch(a.raw, 'sched', CURRENT)); notes = sch.notes_headline.fillna('').str.lower() if 'notes_headline' in sch.columns else None
+        if notes is not None:
+            fin = sch[notes.str.contains('cup') & notes.str.contains('champ|final') & (sch.status_type_completed == True)]
+            if len(fin) and _CUR_CUP is None: leaders['warnings'].append('The NBA Cup championship game has been played but the build did not recognise it, so it is being counted as a regular-season game. Check cup_game_id in nba_build.py against the schedule note "%s".' % fin.notes_headline.iloc[0])
+        last_fin = str(CURRENT - 1)
+        if dt.date.today().month >= 7 and last_fin not in awards: leaders['warnings'].append('static/awards.json has no entries for %d-%s yet: add that season\u2019s winners with add_awards.py so badges and the scorecard stay current.' % (CURRENT - 2, last_fin[2:]))
+    except Exception as e:
+        print('warning checks skipped:', e, file=sys.stderr)
     try:
         leaders['snapshots'] = award_snapshots(a.raw, CURRENT, _CUR_D, _CUR_CUP, shot, leaders, awards, json.load(open(os.path.join(HERE, 'static', 'defmodel.json'))))
         print(f"season tracker: {len(leaders['snapshots']['dates'])} game dates", file=sys.stderr)

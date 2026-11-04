@@ -22,7 +22,10 @@ The page has nine tabs, in this order:
   duos for any team (a switch picks which); at the bottom, a defense shot chart shows where opponents shoot against any team and how well.
 - **Projections.** Projected wins and playoff odds for all 30 teams from simulating the rest of the season, how hard
   each team's remaining schedule is (including back-to-backs left), and a live backtest of the projection model.
-- **The Grindhouse.** The Grizzlies' home base (any team can be picked): standing, next game with win chance, a matchup preview (where it shoots
+- **The Grindhouse** (named after the favorite team's arena: The Garden for Boston, The Blender for New Orleans, and so on;
+  the nicknames are a map near the top of the hub script in `template.html`). Home base for the favorite team, Memphis unless
+  you pick another one on this tab; the choice is kept in the browser. The favorite team is highlighted in every table, gets the roster card on League Leaders, and opens here by default.
+  It shows only the favorite team: standing, next game with win chance, a matchup preview (where it shoots
   against how the opponent defends each zone), results, rotation with on/off, lineups, and the season trend.
 - **About.** How fresh the data is, what is here, how well the award models reproduce past seasons, and the limits.
 
@@ -32,10 +35,15 @@ lists the older ones in the season menus of the Shot charts, Team stats (includi
 and Player Stats tabs; picking one fetches its file, so the page itself stays small. The Awards Watch, League Scoreboard, Projections and
 Grindhouse tabs cover the last five seasons only. Each archived season's menu entry shows its download size, and a
 note under the menu says where ESPN's old data is thin: substitution records are too thin to rebuild lineups before
-2017-18 (about 65% of games from then, 99% from 2020-21), and shot descriptions before 2012-13 use only a few
+2017-18 (from 2017-18 to 2019-20 about 85% of games can be rebuilt, after inferring the few substitutions ESPN logged with a missing name from the box score; 99% from 2020-21) (about 65% of games from then, 99% from 2020-21), and shot descriptions before 2012-13 use only a few
 types, so the shot-type filters are coarse there. Old franchises appear under today's codes (Seattle as OKC, New
 Jersey as BKN; Charlotte has no games before 2004-05). The daily workflow passes `--history 2003`; finished
 seasons are computed once and cached in `raw/season<year>.json`, so later runs only rebuild the season in progress.
+
+**Armando "NBA" Venegas** is a synthetic player in every season, archived ones included: the average of every player with data that season (box-score
+totals averaged across players, and a systematic sample of the league's shots sized to the average player's attempts). He can be
+searched, charted and compared like anyone, and is rebuilt with every update, but he is left out of league baselines, leaderboards,
+award ladders and team figures. Any column heading in a table can be clicked to sort by it.
 
 Most charts and tables have **Save chart as image** and **Download table (CSV)** buttons. On your own site (not
 on the Claude-hosted page) there are also **Copy link** buttons that save the current view in the address.
@@ -109,7 +117,7 @@ A few things are files you edit yourself:
 
 | File | What it holds | When to change it |
 |---|---|---|
-| `static/awards.json` | Real award winners and teams for every finished season since 2002-03, as `[espn_player_id, "type"]` pairs under each season's end year. Types: `mvp`, `fmvp`, `dpoy`, `roy`, `smoy`, `mip`, `clutch`, `an1`-`an3`, `ad1`-`ad2`, `ar1`-`ar2`. | After a season's awards are announced. Add a new year key (`"2027": [...]`). These drive the gold badges and the finished-season tests in the explanations. |
+| `static/awards.json` | Real award winners and teams for every finished season since 2002-03 (add a season with `python add_awards.py 2027 winners.json`; from July the About tab reminds you when the latest season is missing), as `[espn_player_id, "type"]` pairs under each season's end year. Types: `mvp`, `fmvp`, `dpoy`, `roy`, `smoy`, `mip`, `clutch`, `an1`-`an3`, `ad1`-`ad2`, `ar1`-`ar2`. | After a season's awards are announced. Add a new year key (`"2027": [...]`). These drive the gold badges and the finished-season tests in the explanations. |
 | `static/roster.json` | The Grizzlies roster, coach and an "as of" date. Player IDs are filled in from the box scores when missing. | After roster moves. The page shows the "as of" date. |
 | `static/defmodel.json` | A reference copy of the defensive model's weights, fitted once on the real All-Defensive teams. The build does not read this file; the working copy is written into `template.html` (search for `DEFM`). | Only if you refit the model, and then change it in both places. |
 
@@ -131,7 +139,11 @@ and refresh `static/roster.json`.
 since 2002-03 against the real winners in `static/awards.json`, fits the Most Improved regression on all of those
 seasons, and writes the results into the page: the About tab shows a season-by-season scorecard. The models were tuned
 on 2022-23 to 2025-26, so earlier seasons are an out-of-sample test. The defensive weights (`static/defmodel.json`)
-and the Most Improved rules were refitted on all seasons with leave-one-season-out testing. Clutch Player of the Year
+and the Most Improved rules were refitted on all seasons with leave-one-season-out testing. The defensive model counts voting history
+(a player's All-Defensive selections in the previous three seasons) by default, which raised the share of real selections found
+from 51% to 59% in that test; a switch on the panel shows the statistics-only ranking. The All-Defensive teams follow the positional
+rule used through 2022-23 (two guards, two forwards, one center per team). The projections break standings ties with the league's
+tiebreakers (head-to-head, division winner, conference record, then point differential via the team rating). Clutch Player of the Year
 only exists from 2022-23.
 
 ## Good to know
