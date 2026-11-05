@@ -1,0 +1,24 @@
+Leave-one-season-out comparison of the ballot model, run 2026-11-05 with python refit_defmodel.py --grid (the page uses "vote share (C=0.1)")
+
+design: 4303 player-seasons over 23 seasons, 222 selections; votes for 23 seasons: 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026
+standardisation against static/defmodel.json: max |mu diff| 0.00e+00, max |sd diff| 0.00e+00
+binary refit on all seasons vs stored weights: max |w diff| 2.49e-03
+
+Leave-one-season-out over the 23 seasons with votes (the binary model is fitted on the other 22 seasons with awards, the vote-share model on the other 22 seasons with votes):
+model                                selections found  DPOY #1  DPOY top3  rho (voters)  rho (all)  top10 by pts
+binary (C=0.1)                         136/230  (59.1%)       13         18         0.645      0.576     147/230
+vote share (C=0.1)                     138/230  (60.0%)       13         18         0.647      0.576     148/230
+binary (C=0.03)                        136/230  (59.1%)       14         18         0.643      0.577     142/230
+vote share (C=0.03)                    136/230  (59.1%)       14         18         0.642      0.576     141/230
+binary (C=0.3)                         141/230  (61.3%)       13         18         0.646      0.575     149/230
+vote share (C=0.3)                     140/230  (60.9%)       13         18         0.644      0.575     148/230
+binary (C=1)                           141/230  (61.3%)       14         18         0.642      0.575     148/230
+vote share (C=1)                       141/230  (61.3%)       13         18         0.644      0.575     148/230
+vote share, linear ridge               127/230  (55.2%)       14         18         0.631      0.558     138/230
+sqrt vote share (C=0.1)                139/230  (60.4%)       13         18         0.644      0.578     148/230
+sqrt vote share (C=0.3)                138/230  (60.0%)       13         18         0.643      0.577     148/230
+softmax within season (lam=0.03)       137/230  (59.6%)       14         18         0.637      0.577     146/230
+softmax within season (lam=0.1)        137/230  (59.6%)       14         18         0.637      0.577     146/230
+softmax within season (lam=0.3)        137/230  (59.6%)       14         18         0.638      0.577     146/230
+softmax within season (lam=1)          138/230  (60.0%)       14         18         0.639      0.577     146/230
+deployed binary (in sample)            138/230  (60.0%)       13         18         0.649      0.576     148/230

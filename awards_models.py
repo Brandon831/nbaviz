@@ -19,6 +19,7 @@ class Models:
         self.SEAS = {k: {'players': [dict(zip(F, a)) for a in src(k)['players']], 'tg': src(k)['tg'], 'maxg': src(k)['maxg'], 'pos': src(k).get('pos', {})} for k in self.KEYS}
         self.use_rep = True
         self.TEAMS = {k: (archive[k]['teams'] if k in archive else leaders['teams'][k]) for k in self.KEYS}
+        self.RAPM = {k: (archive[k].get('rapm') if k in archive else (leaders.get('rapm') or {}).get(k)) or {} for k in self.KEYS}
         self.ONOFF = {k: (archive[k].get('onoff') if k in archive else (leaders.get('onoff') or {}).get(k)) or {} for k in self.KEYS}
         self.STAND = {k: (archive[k]['shot']['stand'] if k in archive else shot['seasons'][k]['stand']) for k in self.KEYS}
         self.TD = {k: self._tdef(k) for k in self.KEYS}
@@ -68,9 +69,13 @@ class Models:
         for o in self.ONOFF[k].values(): return len(o) >= 17
         return False
     def dscore(self, k, p):
+        """the defensive score: a weighted sum of standardised features, with the weights from static/defmodel.json. The ballot model
+        (cols ending in rep) is a fractional logistic regression on All-Defensive vote shares of 2003-04 to 2025-26 (refit_defmodel.py);
+        the defense index (stats_rim) and the box-score-only fallback (stats) are logistic fits on the real All-Defensive teams."""
         x = {'blk': p['blk']/p['gp'], 'stl': p['stl']/p['gp'], 'dreb': p['dreb']/p['gp'], 'mpg': p['min']/p['gp'], 'tdef': self.TD[k].get(p['team'], 0.0), 'rep': self.past_alldef(k, p['pid'])}
         if self.use_rep and 'rep' in self.DEF['cols']: D = self.DEF
-        elif 'stats_rim' in self.DEF and self.has_rim(k): D = self.DEF['stats_rim']; x['rimds'], x['rimdfg'] = self.rim(k, p['pid'])
+        elif 'stats_rim' in self.DEF and self.has_rim(k):
+            D = self.DEF['stats_rim']; x['rimds'], x['rimdfg'] = self.rim(k, p['pid']); r = self.RAPM[k].get(str(p['pid'])); x['drapm'] = -r[1] if r else 0.0
         else: D = self.DEF.get('stats', self.DEF)
         return sum(w*(x[c]-m)/s for c, m, s, w in zip(D['cols'], D['mu'], D['sd'], D['w']))
     def alldef(self, k, blend=False):

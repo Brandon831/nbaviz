@@ -371,6 +371,31 @@ def positions(d):
         if pid not in out: out[pid] = LAST_POS.get(pid, 'F')
     LAST_POS.update(out); return out
 
+# ----------------------------------------------------------------------------- adjusted plus-minus (RAPM) from the stints
+RAPM_LAMBDA = 2000.0
+def rapm(stints, lam=RAPM_LAMBDA):
+    """Ridge regression of points per 100 possessions on who was on the floor: every stint gives two rows (each side's offense against the other's defense).
+    Returns {player id: [offense effect, defense effect, possessions played]}, where the defense effect is points allowed per 100 possessions relative to
+    average (negative is better). lam is the ridge penalty in possession units; it was chosen by holding games out and predicting their stints."""
+    if not stints: return {}
+    from scipy import sparse
+    from scipy.sparse.linalg import spsolve
+    players = sorted({p for st in stints for p in st[0] + st[1]}); idx = {p: i for i, p in enumerate(players)}; P = len(players)
+    rows = []; cols = []; y = []; w = []; r = 0; poss = {p: 0.0 for p in players}
+    for hf, af, qh, ph, qa, pa in stints:
+        for off, dfn, q, pts in ((hf, af, qh, ph), (af, hf, qa, pa)):
+            if q <= 0: continue
+            for p in off: rows.append(r); cols.append(idx[p])
+            for p in dfn: rows.append(r); cols.append(P + idx[p])
+            y.append(100.0 * pts / q); w.append(q); r += 1
+        for p in hf: poss[p] += qh + qa
+        for p in af: poss[p] += qh + qa
+    X = sparse.csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(r, 2 * P)); W = sparse.diags(np.array(w)); yv = np.array(y)
+    mu = float(np.average(yv, weights=w)); yc = yv - mu
+    A = (X.T @ W @ X + lam * sparse.identity(2 * P)).tocsc(); b = X.T @ (W @ yc)
+    beta = spsolve(A, b)
+    return {str(p): [round(float(beta[i]), 3), round(float(beta[P + i]), 3), int(round(poss[p]))] for p, i in idx.items()}
+
 # ----------------------------------------------------------------------------- lineups and on/off ratings (rebuilt from substitutions)
 TOV_RE = re.compile(r'Turnover|Traveling|Kicked Ball|^Lane$|Double Lane')
 def resolve_subs(events, starters, roster, boxmin, tol):
@@ -431,7 +456,7 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
     size = os.path.getsize(fetch(raw, 'pbp', y))
     if use_cache and y != CURRENT and not keep_games and os.path.exists(cache):
         c = json.load(open(cache))
-        if c.get('pbp_size') == size and c.get('v') == 6: return c['data']
+        if c.get('pbp_size') == size and c.get('v') == 7: return c['data']
     cols = ['game_id','sequence_number','period_number','clock_minutes','clock_seconds','type_text','athlete_id_1','athlete_id_2','team_id','home_team_id','away_team_id',
             'home_team_abbrev','away_team_abbrev','home_score','away_score','shooting_play','scoring_play','coordinate_x','coordinate_y','season_type']
     d = readp(fetch(raw, 'pbp', y), columns=cols)
@@ -465,7 +490,7 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
     tid = d.team_id.values; a1 = d.athlete_id_1.values; a2 = d.athlete_id_2.values; hs = d.home_score.values; as_ = d.away_score.values
     hid_all = d.home_team_id.values; aid_all = d.away_team_id.values
     bounds = np.flatnonzero(np.r_[True, gid[1:] != gid[:-1], True])
-    lineups = {}; onoff = {}; clean = 0; total = 0; pm_all = {}; flows = {}; errs = []
+    lineups = {}; onoff = {}; clean = 0; total = 0; pm_all = {}; flows = {}; errs = []; stints = []
     for bi in range(len(bounds) - 1):
         lo, hi = bounds[bi], bounds[bi + 1]; g = int(gid[lo]); total += 1
         h, a = int(hid_all[lo]), int(aid_all[lo])
@@ -487,6 +512,8 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
             repaired += 1
         on = {h: set(starters[(g, h)]), a: set(starters[(g, a)])}; cur = {h: tuple(sorted(on[h])), a: tuple(sorted(on[a]))}; acc = {h: {}, a: {}}
         def vec(t): return acc[t].setdefault(cur[t], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        gst = {}   # (home five, away five) -> [home possessions, home points, away possessions, away points]
+        def pair(): return gst.setdefault((cur[h], cur[a]), [0.0, 0.0, 0.0, 0.0])
         ok = True; curper = None; tprev = 720.0; ph = pa = 0; elapsed0 = 0.0; marks = []
         for i in range(lo, hi):
             p_ = int(per[i])
@@ -507,6 +534,7 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
                 if dh < 0: dh = 0
                 if da < 0: da = 0
                 vh, va = vec(h), vec(a); vh[1] += dh; vh[2] += da; va[1] += da; va[2] += dh
+                pv = pair(); pv[1] += dh; pv[3] += da
             ph, pa = max(ph, h2), max(pa, a2_)
             if keep_games: marks.append((elapsed0 + (720.0 if p_ <= 4 else 300.0) - tprev, ph - pa))
             c = comp[i]
@@ -514,6 +542,7 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
                 t = int(tid[i])
                 if t in acc:
                     o = a if t == h else h; vec(t)[3] += c; vec(o)[4] += c
+                    pv = pair(); pv[0 if t == h else 2] += c
                     if is_fga[i]:
                         vo = vec(o); vo[5] += 1
                         if is_rim[i]: vo[6] += 1; vo[7] += 1 if is_make[i] else 0
@@ -538,6 +567,8 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
             worst = max(worst, abs(sec / 60.0 - boxmin[(g, p)]))
         if worst > tol: continue
         clean += 1; errs.append(worst)
+        for (hf, af), v in gst.items():
+            if v[0] > 0 or v[2] > 0: stints.append([list(hf), list(af), round(v[0], 2), int(v[1]), round(v[2], 2), int(v[3])])
         for t in (h, a):
             T = [0.0] * 8
             for key, v in acc[t].items():
@@ -579,12 +610,12 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
             rows.sort(key=lambda r: -r[1][0])
             out[team] = [list(k[1:]) + [round(x, 1) for x in v[:5]] + ([int(v[5])] if len(v) > 5 else []) for k, v in rows[:n]]
         return out
-    res = {'coverage': [clean, total], 'repaired': repaired, 'maxerr': round(float(np.max(errs)), 2) if errs else None,
+    res = {'coverage': [clean, total], 'repaired': repaired, 'maxerr': round(float(np.max(errs)), 2) if errs else None, 'rapm': rapm(stints),
            'onoff': {str(p): [int(o[0])] + [round(x, 2) for x in o[1:]] for p, o in onoff.items()},
            'lineups': top(lineups, 15), 'pairs': top(pairs, 15)}
     if keep_games: res['pm'] = {str(g): v for g, v in pm_all.items()}; res['flows'] = {str(g): v for g, v in flows.items()}
     if use_cache and y != CURRENT and not keep_games:
-        json.dump({'v': 6, 'pbp_size': size, 'data': res}, open(cache, 'w'), separators=(',', ':'))
+        json.dump({'v': 7, 'pbp_size': size, 'data': res}, open(cache, 'w'), separators=(',', ':'))
     return res
 
 def flows_data(raw, y, cup_id):
@@ -769,7 +800,7 @@ def build_blocks(raw, refresh_current=True):
     ADD_AVG = True
     cups = {y: cup_game_id(raw, y) for y in SEASONS}
     print('cup championship games:', cups, file=sys.stderr)
-    names = {}; seasons = {}; hist = {}; teams = {}; clutch = {}; tgames = {}; onoff = {}; lineups = {}; pairs = {}; lcov = {}; cur = None; cur_d = None; gbox = None; gx = None
+    names = {}; seasons = {}; hist = {}; teams = {}; clutch = {}; tgames = {}; onoff = {}; lineups = {}; pairs = {}; lcov = {}; rapm_all = {}; cur = None; cur_d = None; gbox = None; gx = None
     for y in SEASONS:
         k = str(y)
         seasons[k] = build_season(raw, y, names, cups[y])
@@ -777,7 +808,7 @@ def build_blocks(raw, refresh_current=True):
         tgames[k] = team_games(raw, y, d, seasons[k].pop('_grp'))
         gids = tgames[k].pop('_gids'); shot_gid = seasons[k].pop('_gid')
         ld = lineup_data(raw, y, cups[y], d, keep_games=(y == CURRENT))
-        onoff[k] = ld['onoff']; lineups[k] = ld['lineups']; pairs[k] = ld['pairs']; lcov[k] = ld['coverage']
+        onoff[k] = ld['onoff']; lineups[k] = ld['lineups']; pairs[k] = ld['pairs']; lcov[k] = ld['coverage']; rapm_all[k] = ld.get('rapm', {})
         if y == CURRENT:
             gbox = game_boxes(d, gids, ld.get('pm', {}), flows_data(raw, y, cups[y]))
             order = {int(g): i for i, g in enumerate(gids)}
@@ -801,12 +832,12 @@ def build_blocks(raw, refresh_current=True):
     hp = {k: hist[k]['players'] for k in hist}; hs = {k: seasons[k]['stand'] for k in hist}
     leaders = {'key': str(CURRENT), 'asof': cur['asof'], 'games': cur['games'], 'maxg': cur['maxg'], 'tg': cur['tg'], 'players': cur['players'], 'pos': cur.get('pos', {}),
                'hist': hist, 'mem': {'record': record, 'coach': roster['coach'], 'roster': roster['roster'], 'rosterAsOf': roster['rosterAsOf']},
-               'teams': teams, 'tgames': tgames, 'tcolors': team_colors(cur_d), 'onoff': onoff, 'lineups': lineups, 'pairs': pairs, 'lcov': lcov, 'gbox': gbox, 'remaining': remaining_games(raw, CURRENT), 'builtAt': BUILT_AT, 'clutch': clutch, 'race': mvp_race(cur_d, hp, hs), 'sched': games_table(raw, CURRENT)}
+               'teams': teams, 'tgames': tgames, 'tcolors': team_colors(cur_d), 'onoff': onoff, 'lineups': lineups, 'pairs': pairs, 'lcov': lcov, 'rapm': rapm_all, 'gbox': gbox, 'remaining': remaining_games(raw, CURRENT), 'builtAt': BUILT_AT, 'clutch': clutch, 'race': mvp_race(cur_d, hp, hs), 'sched': games_table(raw, CURRENT)}
     shot = {'names': {str(k): v for k, v in names.items()}, 'seasons': seasons}
     return shot, leaders
 
 # ----------------------------------------------------------------------------- archived seasons (one file each, loaded by the page on demand)
-ARCHIVE_VERSION = 6
+ARCHIVE_VERSION = 7
 def season_payload(raw, y):
     """Everything the page needs for one finished season, as one JSON-ready object. Cached in raw/ because finished seasons never change."""
     cache = os.path.join(raw, f'season{y}.json')
@@ -820,7 +851,7 @@ def season_payload(raw, y):
     tg = team_games(raw, y, d, s.pop('_grp')); tg.pop('_gids', None); s.pop('_gid', None)
     ld = lineup_data(raw, y, cup, d)
     data = {'key': str(y), 'shot': s, 'names': {str(k): v for k, v in names.items()}, 'hist': L, 'teams': team_ratings(d), 'tgames': tg,
-            'onoff': ld['onoff'], 'lineups': ld['lineups'], 'pairs': ld['pairs'], 'lcov': ld['coverage']}
+            'onoff': ld['onoff'], 'lineups': ld['lineups'], 'pairs': ld['pairs'], 'lcov': ld['coverage'], 'rapm': ld.get('rapm', {})}
     json.dump({'v': ARCHIVE_VERSION, 'data': data}, open(cache, 'w'), separators=(',', ':'))
     return data
 
@@ -829,7 +860,7 @@ def build_archive(raw, first_year, out_dir, url_of):
     os.makedirs(out_dir, exist_ok=True); manifest = {}
     for y in range(first_year, SEASONS[0]):
         p = season_payload(raw, y); path = os.path.join(out_dir, f'season-{y}.json')
-        slim = dict(p); slim['hist'] = {k: v for k, v in p['hist'].items() if k != 'pos'}   # positions are only needed by the build's own backtest
+        slim = {k: v for k, v in p.items() if k != 'rapm' or v}; slim['hist'] = {k: v for k, v in p['hist'].items() if k != 'pos'}   # positions are only needed by the build's own backtest; RAPM is published where it exists
         json.dump(slim, open(path, 'w'), separators=(',', ':'))
         sch = readp(fetch(raw, 'sched', y)); scheduled = int((sch.season_type == 2).sum()) if 'season_type' in sch.columns else len(sch)
         bg = p['hist']['games']; lc = p['lcov']

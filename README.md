@@ -119,7 +119,8 @@ A few things are files you edit yourself:
 |---|---|---|
 | `static/awards.json` | Real award winners and teams for every finished season since 2002-03 (add a season with `python add_awards.py 2027 winners.json`; from July the About tab reminds you when the latest season is missing), as `[espn_player_id, "type"]` pairs under each season's end year. Types: `mvp`, `fmvp`, `dpoy`, `roy`, `smoy`, `mip`, `clutch`, `an1`-`an3`, `ad1`-`ad2`, `ar1`-`ar2`. | After a season's awards are announced. Add a new year key (`"2027": [...]`). These drive the gold badges and the finished-season tests in the explanations. |
 | `static/roster.json` | The Grizzlies roster, coach and an "as of" date. Player IDs are filled in from the box scores when missing. | After roster moves. The page shows the "as of" date. |
-| `static/defmodel.json` | A reference copy of the defensive model's weights, fitted once on the real All-Defensive teams. The build does not read this file; the working copy is written into `template.html` (search for `DEFM`). | Only if you refit the model, and then change it in both places. |
+| `static/defmodel.json` | The defensive model's weights: the ballot model fitted on All-Defensive vote shares (`static/votes.json`), plus the box-score-only and defense-index fits on the real teams. The build reads it for the scorecard and the season tracker; the page's copy is the `DEFM` line in `template.html`, and `check_models.py` fails if the two differ. | Only if you refit the model (`python refit_defmodel.py --write`), and then update the `DEFM` line too. |
+| `static/votes.json` | Full All-Defensive voting points for every vote-getter, 2003-04 to 2025-26, from Basketball-Reference's awards pages (`python add_votes.py 2027 awards_2027.html`). The ballot model is fitted on these. | After a season's voting is published, if you want to refit. |
 
 ## Rolling over to a new season
 
@@ -139,12 +140,38 @@ and refresh `static/roster.json`.
 since 2002-03 against the real winners in `static/awards.json`, fits the Most Improved regression on all of those
 seasons, and writes the results into the page: the About tab shows a season-by-season scorecard. The models were tuned
 on 2022-23 to 2025-26, so earlier seasons are an out-of-sample test. The defensive weights (`static/defmodel.json`)
-and the Most Improved rules were refitted on all seasons with leave-one-season-out testing. The defensive model counts voting history
-(a player's All-Defensive selections in the previous three seasons) by default, which raised the share of real selections found
-from 51% to 59% in that test; a switch on the panel shows the statistics-only ranking. The All-Defensive teams follow the positional
+and the Most Improved rules were refitted on all seasons with leave-one-season-out testing. The Defensive Player panel offers three rankings: the
+**ballot model** (box score, team defence and voting history, fitted on the full All-Defensive voting of every season rather than the ten
+selections; voting history raised the share of real selections found from 51% to 59% in that test, and the vote-share fit added two more, 138 of 230), the **defense index** (box score, team defence, rim deterrence and defensive adjusted plus-minus from the rebuilt lineup stints,
+no voting history), and **adjusted plus-minus** alone. Adjusted plus-minus is a ridge regression (penalty 2,000, chosen by holding
+stints out) of points per 100 possessions on the ten players on the floor, computed per season from 2017-18 on; it is also on the
+Player Stats tab. Voters follow blocks, steals and reputation far more than measured impact, which is why the views are side by side. The All-Defensive teams follow the positional
 rule used through 2022-23 (two guards, two forwards, one center per team). The projections break standings ties with the league's
 tiebreakers (head-to-head, division winner, conference record, then point differential via the team rating). Clutch Player of the Year
 only exists from 2022-23.
+
+## The ballot model is fitted on vote shares (step 3 of the defensive-model work, done)
+
+`static/votes.json` holds full All-Defensive voting points per player (every vote-getter, not just the ten selections) for every season
+from 2003-04 to 2025-26, taken from Basketball-Reference's awards pages: 23 seasons, 950 vote-getters in all, 868 of them among the
+players the Defensive Player ladder considers. The ballot model's weights are a fractional logistic regression on each player's share
+of the points possible (0 for a player with no vote), with the same six features and the same regularisation (C=0.1) as the earlier
+yes/no fit on the ten selections, so the page's `dscore` is unchanged apart from the weights.
+
+`python refit_defmodel.py` reruns the comparison (it needs the cached seasons from a `--history 2003` build). Holding each season out in
+turn and scoring it with a model fitted on the other 22, the vote-share fit found 138 of 230 real All-Defensive selections against 136
+for the yes/no fit, ranked the same 13 of 23 Defensive Players of the Year first, and correlated with the vote points at 0.647 against
+0.645 among the vote-getters (Spearman; 0.576 for both over every eligible player). The gain is small, and a within-season softmax on
+the points, a square-root share and a linear fit all landed in the same 136 to 141 band, as did the yes/no fit with weaker
+regularisation: the six features carry about as much as the vote can tell them, and a better ballot model would need new inputs rather
+than a new target. The vote-share weights are a near-uniform rescaling of the yes/no ones (team defence counts a little less relative
+to steals and blocks). The defense index and adjusted plus-minus views were not refitted.
+
+To add a season, save `https://www.basketball-reference.com/awards/awards_<year>.html` from your browser and run
+`python add_votes.py <year> <saved file>` (it reads the hidden table from the HTML, matches names to ESPN ids, and reports any it cannot
+match, listing the box-score names with the same surname; add the spelling to `ALIASES` in the script, as was done for Darrell
+Armstrong, whom ESPN lists as Darrel). Each season's points should add up to 7.5 times the points possible (every voter gives 15);
+2005-06, 2008-09 and 2010-11 are off by a few points on the source pages themselves.
 
 ## Good to know
 
@@ -173,7 +200,11 @@ only exists from 2022-23.
 nba_build.py          the whole build: downloads data, computes everything, writes the page and the data/ season files
 template.html         the page itself (layout, styles and the scripts that draw everything)
 check_build.py        checks a built page before it is published
-static/               awards.json and roster.json (read by the build); defmodel.json (reference copy)
+check_models.py       runs the page's own award ladders in node and checks them against awards_models.py (needs node)
+awards_models.py      the award models in Python, for the scorecard and the season tracker
+refit_defmodel.py     refits the ballot model on vote shares and tests it season by season (--write updates static/defmodel.json)
+add_awards.py         adds a season's real awards to static/awards.json; add_votes.py adds a season's All-Defensive voting to static/votes.json
+static/               awards.json, roster.json, defmodel.json and votes.json (all read by the build or the refit)
 .github/workflows/    the daily GitHub Actions job
 requirements.txt      pandas, numpy, pyarrow
 ```
