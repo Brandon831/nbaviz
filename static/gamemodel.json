@@ -1,0 +1,15 @@
+{
+ "K": 10,
+ "PW": 0.4,
+ "GAP": 0.972,
+ "HCA": 1.92,
+ "B2B": 2.36,
+ "SIG": 13.68,
+ "avail": {
+  "value": -0.242,
+  "mins": -1.971,
+  "repl": -8.13,
+  "from": 2019
+ },
+ "fit": "fit_gamemodel.py on the box scores of 2003-04 to 2025-26: K and PW by held-out log loss over all seasons (0.6112 for the earlier K=10, PW=0.4; 0.6106 for the fit); GAP, HCA, B2B and SIG by least squares on the home margin over 2017-18 onward (held-out log loss 0.6245 without the rest term, 0.6223 with it, 0.6235 for the earlier constants); availability on 2018-19 onward (held-out log loss 0.6226 without, 0.6131 with the previous-season RAPM of the regulars who sat out, 0.6106 with same-season RAPM)"
+}

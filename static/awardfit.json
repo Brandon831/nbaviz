@@ -1,0 +1,27 @@
+{
+ "mvp": {
+  "tau": 2.1798,
+  "seasons": 23,
+  "beta": 0.2,
+  "verdict": "NOISE"
+ },
+ "dpoy": {
+  "tau": 1.0302,
+  "seasons": 23
+ },
+ "roy": {
+  "tau": 1.6977,
+  "seasons": 23
+ },
+ "smoy": {
+  "tau": 1.6636,
+  "seasons": 23,
+  "beta": 0.14,
+  "verdict": "ADOPT"
+ },
+ "mip": {
+  "tau": 1.1127,
+  "seasons": 23
+ },
+ "note": "tau: within-season softmax temperature turning each ladder\u2019s scores into a predicted share of the vote, fitted on the real voting in static/votes.json by refit_awards.py; beta: the team-record weight of the MVP and Sixth Man scores, fitted the same way. The page reads this block as L.awardfit."
+}
