@@ -8,7 +8,7 @@ on:
   workflow_dispatch:           # also lets you run it by hand from the Actions tab
 
 permissions:
-  contents: read
+  contents: write          # the build commits each day's injury report to logs/injuries/
   pages: write
   id-token: write
 
@@ -38,6 +38,13 @@ jobs:
         run: python nba_build.py --raw raw --out docs/index.html --history 2003
       - name: Check the result before publishing it
         run: python check_build.py docs/index.html
+      - name: Keep the day's injury report in the repository
+        # logs/injuries/<date>.json: check_injuries.py compares these with who actually dressed, to measure the status weights
+        run: |
+          if [ -n "$(git status --porcelain logs 2>/dev/null)" ]; then
+            git config user.name "nba-dashboard bot"; git config user.email "actions@users.noreply.github.com"
+            git add logs && git commit -m "Injury report $(date -u +%F)" && git push
+          fi
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs
