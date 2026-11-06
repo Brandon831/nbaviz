@@ -1,0 +1,35 @@
+Award models against the real voting of all 23 seasons, on the corrected standings and games-played counts, run 2026-11-05 with python refit_awards.py --write
+
+seasons with voting on file: 2004 (8 tables), 2005 (8 tables), 2006 (8 tables), 2007 (8 tables), 2008 (8 tables), 2009 (8 tables), 2010 (8 tables), 2011 (8 tables), 2012 (8 tables), 2013 (8 tables), 2014 (8 tables), 2015 (8 tables), 2016 (8 tables), 2017 (8 tables), 2018 (8 tables), 2019 (8 tables), 2020 (8 tables), 2021 (8 tables), 2022 (8 tables), 2023 (9 tables), 2024 (9 tables), 2025 (9 tables), 2026 (9 tables)
+
+== The models against the real vote (end-of-season rankings, no blending) ==
+award    seasons winner #1  top 3 median rank rho (voters) points in pool     tau
+mvp           23    16/23      21         1.0        0.742          100%   2.180
+dpoy          23    13/23      18         1.0        0.534           96%   1.030
+roy           23    22/23      22         1.0        0.759           94%   1.698
+smoy          23    14/23      20         1.0        0.595           98%   1.822
+mip           23     9/23      15         2.0        0.581           89%   1.113
+
+== Team-record weight beta (score = Game Score per game + beta * (100*T - 50)); the page uses 0.2 ==
+mvp: beta fitted on all 23 seasons = 0.22 (held-out choices ranged 0.20 to 0.22), tau = 2.222
+   page (beta=0.2)          winner #1 in 16/23, top 3 in 21, median rank 1.0, rho among voters 0.742
+   fitted beta (held out)   winner #1 in 16/23, top 3 in 21, median rank 1.0, rho among voters 0.746
+   bootstrap: fitted beta vs 0.2, rank correlation           +0.004 per season [95% -0.001, +0.009] over 23 seasons: NOISE
+   bootstrap: fitted beta vs 0.2, winner ranked first        +0.00 per season [95% +0.00, +0.00] over 23 seasons: NOISE
+   -> the fitted beta is not distinguishable from 0.2 over these seasons; --write keeps 0.2 for mvp
+smoy: beta fitted on all 23 seasons = 0.14 (held-out choices ranged 0.12 to 0.16), tau = 1.664
+   page (beta=0.2)          winner #1 in 14/23, top 3 in 20, median rank 1.0, rho among voters 0.595
+   fitted beta (held out)   winner #1 in 15/23, top 3 in 20, median rank 1.0, rho among voters 0.640
+   bootstrap: fitted beta vs 0.2, rank correlation           +0.045 per season [95% +0.025, +0.068] over 23 seasons: ADOPT
+   bootstrap: fitted beta vs 0.2, winner ranked first        +0.04 per season [95% +0.00, +0.13] over 23 seasons: NOISE
+
+== Two-era Defensive Player ballot model (adds defensive RAPM and opponent rim shooting on/off from 2017-18) ==
+9 seasons with the extra features: 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026
+   six features (fitted on the other 22 seasons)        selections found 53/90 (59%), DPOY #1 in 5, top 3 in 7, rho among voters 0.606
+   nine features (fitted on the other recent seasons)   selections found 58/90 (64%), DPOY #1 in 5, top 3 in 7, rho among voters 0.662
+   nine-feature weights on all recent seasons: blk +0.617, stl +0.760, dreb +0.092, mpg +0.209, tdef +0.753, rep +0.430, drapm +0.494, rimds +0.278, rimdfg +0.120
+   bootstrap: nine vs six features, selections found         +0.56 per season [95% -0.22, +1.44] over 9 seasons: NOISE
+   bootstrap: nine vs six features, rank correlation         +0.056 per season [95% +0.016, +0.094] over 9 seasons: ADOPT
+
+wrote static/awardfit.json: {"mvp": {"tau": 2.1798, "seasons": 23, "beta": 0.2, "verdict": "NOISE"}, "dpoy": {"tau": 1.0302, "seasons": 23}, "roy": {"tau": 1.6977, "seasons": 23}, "smoy": {"tau": 1.6636, "seasons": 23, "beta": 0.14, "verdict": "ADOPT"}, "mip": {"tau": 1.1127, "seasons": 23}, "note": "tau: within-season softmax temperature turning each ladder\u2019s scores into a predicted share of the vote, fitted on the real voting in static/votes.json by refit_awards.py; beta: the team-record weight of the MVP and Sixth Man scores, fitted the same way. The page reads this block as L.awardfit."}
+wrote the recent-era block into static/defmodel.json

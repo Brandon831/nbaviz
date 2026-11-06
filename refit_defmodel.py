@@ -21,6 +21,7 @@ from scipy.stats import spearmanr
 from sklearn.linear_model import LogisticRegression
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import awards_models
+from bootstrap import bootstrap_report
 
 def load_models(raw, first=2003, last=2026):
     """awards_models.Models over the cached finished seasons first..last, with `last` playing the part of the embedded season"""
@@ -90,7 +91,7 @@ def main():
     ap.add_argument('--raw', default='raw'); ap.add_argument('--write', action='store_true', help='write the vote-share weights into static/defmodel.json')
     ap.add_argument('--C', type=float, default=0.1); ap.add_argument('--grid', action='store_true', help='also try other C values and a linear fit')
     a = ap.parse_args()
-    M = load_models(a.raw); votes = json.load(open(os.path.join(HERE, 'static', 'votes.json')))
+    M = load_models(a.raw); votes = {k: v['alldef'] for k, v in json.load(open(os.path.join(HERE, 'static', 'votes.json'))).items() if 'alldef' in v}   # votes.json holds every award; the ballot model uses the All-Defensive table
     all_seasons = [k for k in M.KEYS if k in M.AW and int(k) >= 2004]; vote_seasons = [k for k in all_seasons if k in votes]
     K, P, X, Y, PTS, SH = design(M, all_seasons, votes)
     mu = X.mean(0); sd = X.std(0); Z = (X - mu) / sd
@@ -129,6 +130,12 @@ def main():
     names = list(res); print(' ' * 8 + ''.join(f'{n[:30]:>32s}' for n in names))
     for k in vote_seasons:
         print(f'{int(k)-1}-{k[2:]} ' + ''.join(f"{res[n][k]['hits']:>14d} | {str(res[n][k]['dpoy']):>3s} | {res[n][k]['rho_voters']:5.2f}   " for n in names))
+    # ---- is the vote-share fit's gain over the yes/no fit bigger than the noise between seasons?
+    bn, vs_ = 'binary (C=%g)' % a.C, 'vote share (C=%g)' % a.C
+    print('\nBootstrap over seasons (gain of the vote-share fit over the yes/no fit):')
+    bootstrap_report('  selections found', [res[vs_][k]['hits'] - res[bn][k]['hits'] for k in vote_seasons], 'sel')
+    bootstrap_report('  rank correlation among voters', [res[vs_][k]['rho_voters'] - res[bn][k]['rho_voters'] for k in vote_seasons], 'rho')
+    bootstrap_report('  real DPOY ranked first', [int(res[vs_][k]['dpoy'] == 1) - int(res[bn][k]['dpoy'] == 1) for k in vote_seasons], 'win')
     # ---- the final fits, on every season
     w_share_all = fit_share(Z[np.isin(K, vote_seasons)], SH[np.isin(K, vote_seasons)], a.C)
     print('\nweights (standardised features):'); print(f"{'':10s}" + ''.join(f'{c:>9s}' for c in COLS))

@@ -8,9 +8,12 @@ HW = (5, 3, 2); GCAP = 60; K = 10; KT = 15; BETA = 0.2
 MIP = {'cap': 16, 'prevfrac': 0.5, 'prevmpg': 10, 'minmpg': 24}
 
 class Models:
-    def __init__(self, shot, leaders, archive, awards, defmodel):
-        """shot/leaders: the page's two data blocks; archive: {end-year: season payload} for older seasons; awards: static/awards.json; defmodel: static/defmodel.json"""
+    def __init__(self, shot, leaders, archive, awards, defmodel, awardfit=None):
+        """shot/leaders: the page's two data blocks; archive: {end-year: season payload} for older seasons; awards: static/awards.json; defmodel: static/defmodel.json;
+        awardfit: static/awardfit.json (the team-record weights and vote-share temperatures fitted on the real voting), taken from leaders['awardfit'] when not given"""
         self.AW = awards; self.DEF = defmodel
+        self.AWF = awardfit if awardfit is not None else (leaders.get('awardfit') or {})
+        self.BETA_MVP = self.AWF.get('mvp', {}).get('beta', BETA); self.BETA_SMOY = self.AWF.get('smoy', {}).get('beta', BETA)
         cur = leaders['key']
         self.KEYS = sorted(set(archive) | set(leaders['hist']) | {cur})
         def src(k):
@@ -55,7 +58,7 @@ class Models:
     # ---- the models
     def mvp(self, k, blend=True):
         S = self.SEAS[k]; f = self.blended(k, lambda kk, p: self.gs(p)/p['gp'], blend, 8.0)
-        return self.sort_out([{'p': p, 'score': f(p) + BETA*(100*self.team_T(k, p['team'], blend) - 50)} for p in S['players'] if self.gp_ok(p, S) and p['min']/p['gp'] >= 25])
+        return self.sort_out([{'p': p, 'score': f(p) + self.BETA_MVP*(100*self.team_T(k, p['team'], blend) - 50)} for p in S['players'] if self.gp_ok(p, S) and p['min']/p['gp'] >= 25])
     def past_alldef(self, k, pid):
         """was the player on an All-Defensive team in any of the three previous seasons"""
         for j in (1, 2, 3):
@@ -71,11 +74,16 @@ class Models:
     def dscore(self, k, p):
         """the defensive score: a weighted sum of standardised features, with the weights from static/defmodel.json. The ballot model
         (cols ending in rep) is a fractional logistic regression on All-Defensive vote shares of 2003-04 to 2025-26 (refit_defmodel.py);
-        the defense index (stats_rim) and the box-score-only fallback (stats) are logistic fits on the real All-Defensive teams."""
+        from the season in defmodel['recent']['from'] (2017-18, when lineups can be rebuilt) it uses the recent-era block, which adds defensive
+        RAPM and opponent rim shooting on/off (refit_awards.py). The defense index (stats_rim) and the box-score-only fallback (stats) are
+        logistic fits on the real All-Defensive teams."""
         x = {'blk': p['blk']/p['gp'], 'stl': p['stl']/p['gp'], 'dreb': p['dreb']/p['gp'], 'mpg': p['min']/p['gp'], 'tdef': self.TD[k].get(p['team'], 0.0), 'rep': self.past_alldef(k, p['pid'])}
-        if self.use_rep and 'rep' in self.DEF['cols']: D = self.DEF
-        elif 'stats_rim' in self.DEF and self.has_rim(k):
-            D = self.DEF['stats_rim']; x['rimds'], x['rimdfg'] = self.rim(k, p['pid']); r = self.RAPM[k].get(str(p['pid'])); x['drapm'] = -r[1] if r else 0.0
+        def impact():
+            x['rimds'], x['rimdfg'] = self.rim(k, p['pid']); r = self.RAPM[k].get(str(p['pid'])); x['drapm'] = -r[1] if r else 0.0
+        if self.use_rep and 'rep' in self.DEF['cols']:
+            D = self.DEF; rc = self.DEF.get('recent')
+            if rc and int(k) >= rc['from'] and self.has_rim(k): D = rc; impact()
+        elif 'stats_rim' in self.DEF and self.has_rim(k): D = self.DEF['stats_rim']; impact()
         else: D = self.DEF.get('stats', self.DEF)
         return sum(w*(x[c]-m)/s for c, m, s, w in zip(D['cols'], D['mu'], D['sd'], D['w']))
     def alldef(self, k, blend=False):
@@ -99,7 +107,7 @@ class Models:
         return self.sort_out([{'p': p, 'score': self.gs(p)/p['gp']} for p in S['players'] if p['pid'] not in seen and p['gp'] >= max(1, math.ceil(frac*S['tg'].get(p['team'], S['maxg']))) and p['min']/p['gp'] >= 15])
     def smoy(self, k, blend=True):
         S = self.SEAS[k]
-        return self.sort_out([{'p': p, 'score': self.gs(p)/p['gp'] + BETA*(100*self.team_T(k, p['team'], blend) - 50)} for p in S['players'] if self.gp_ok(p, S) and p['min']/p['gp'] >= 15 and p['gst']/p['gp'] < 0.5])
+        return self.sort_out([{'p': p, 'score': self.gs(p)/p['gp'] + self.BETA_SMOY*(100*self.team_T(k, p['team'], blend) - 50)} for p in S['players'] if self.gp_ok(p, S) and p['min']/p['gp'] >= 15 and p['gst']/p['gp'] < 0.5])
     def per(self, p): return {'gs': self.gs(p)/p['gp'], 'mpg': p['min']/p['gp'], 'gp': p['gp']}
     def mip_fit(self, seasons=None):
         """the expected change in Game Score per game given last year's level, from all finished seasons with a season before them"""
@@ -128,6 +136,11 @@ class Models:
             if not p or not self.gp_ok(p, S): continue
             out.append({'p': p, 'score': pts + 0.7*ast - tov - 0.7*(fga - fgm) - 0.4*(fta - ftm)})
         return self.sort_out(out)
+    def shares(self, lst, award):
+        """predicted share of the vote for each entry of a ladder: a within-season softmax of the scores with the award's fitted temperature (static/awardfit.json); None when the award has none"""
+        t = self.AWF.get(award, {}).get('tau')
+        if not t or not lst: return None
+        mx = lst[0]['score']; w = [math.exp((r['score'] - mx) / t) for r in lst]; z = sum(w); return [v / z for v in w]
     # ---- scoring against the real awards
     def winner(self, k, t): r = [pid for pid, tt in self.AW.get(k, []) if tt == t]; return r[0] if r else None
     @staticmethod

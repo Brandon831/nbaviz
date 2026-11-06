@@ -71,6 +71,9 @@ select:focus-visible,input:focus-visible,.seg input:focus-visible+span{outline:2
 .controls>.seg{flex:0 1 auto;min-width:0}
 .checks label{display:flex;align-items:center;gap:8px;font-size:15px;cursor:pointer}
 .checks input{width:18px;height:18px;accent-color:var(--cold);margin:0}
+.checks label.off,.field label.bestchk.off{opacity:.55;cursor:default}
+.field label.bestchk{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:400;color:var(--ink);margin:8px 0 0;cursor:pointer}
+.field label.bestchk input{width:18px;height:18px;accent-color:var(--cold);margin:0}
 
 .stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,470px);gap:16px;align-items:start}
 .card{background:var(--surface);border:1px solid var(--rule);border-radius:10px}
@@ -78,6 +81,22 @@ select:focus-visible,input:focus-visible,.seg input:focus-visible+span{outline:2
 .who h2{font:700 clamp(30px,4.2vw,46px)/1 var(--head);margin:0}
 .who p{margin:4px 0 12px;color:var(--muted)}
 .who p.asof{margin:-6px 0 8px;font-size:14px}
+.arc{margin:-4px 0 10px;max-width:460px}
+.arc:empty{display:none}
+.arc svg{display:block;width:100%;height:auto;overflow:visible}
+.arc .ln{fill:none;stroke:var(--muted);stroke-width:1.5;opacity:.7}
+.arc .dt{fill:var(--surface);stroke:var(--muted);stroke-width:1.5;cursor:pointer}
+.arc .dt.cur{stroke:var(--cold);stroke-width:2.5}
+.arc .dt.best{fill:var(--hot);stroke:var(--hot)}
+.arc .dt:hover,.arc .dt:focus{stroke-width:3;outline:none}
+.arc text{font:500 11px var(--body);fill:var(--muted)}
+.arc text.v{font-weight:700;fill:var(--ink)}
+.arc .cap{font-size:12.5px;color:var(--muted);margin:2px 0 0}
+.ftoggle{display:none}
+@media (max-width:720px){.ftoggle{display:inline-block;height:auto;padding:4px 0;margin-top:4px}.controls:not(.showf) .filters{display:none}}
+.stbl td.h1{background:color-mix(in srgb,var(--hot) 55%,transparent)}.stbl td.h2{background:color-mix(in srgb,var(--hot) 34%,transparent)}.stbl td.h3{background:color-mix(in srgb,var(--hot) 16%,transparent)}
+.stbl td.h4{background:color-mix(in srgb,var(--cold) 16%,transparent)}.stbl td.h5{background:color-mix(in srgb,var(--cold) 38%,transparent)}
+.hkey{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12.5px;color:var(--muted);margin:8px 0 0}.hkey span{display:inline-flex;align-items:center;gap:5px}.hkey i{display:inline-block;width:14px;height:14px;border-radius:3px}
 .who p.xl{margin:0 0 12px;font-size:15px}
 .who p.xl a{color:var(--cold);font-weight:500;text-underline-offset:3px}
 .who p.xl a:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:3px}
@@ -625,12 +644,15 @@ th[aria-sort=ascending]::after{content:" \25B2";font-size:.75em;color:var(--mute
         <label><input type="radio" name="metric" value="diff" checked><span>FG% vs. league</span></label>
         <label><input type="radio" name="metric" value="pps"><span>Points per shot vs. league</span></label>
         <label><input type="radio" name="metric" value="freq"><span>Shot share</span></label>
+        <label><input type="radio" name="metric" value="xdiff"><span>FG% vs. expected</span></label>
       </div>
     </fieldset>
     <div class="checks">
       <label><input type="checkbox" id="dots"> Show every shot</label>
+      <label id="best1w"><input type="checkbox" id="best1"> <span id="best1l">Show the player’s best season</span></label>
     </div>
-    <div class="filters" role="group" aria-label="Filters and comparison">
+    <button type="button" class="linkbtn ftoggle" id="ftoggle" aria-expanded="false" aria-controls="filters">Filters and comparison ▾</button>
+    <div class="filters" id="filters" role="group" aria-label="Filters and comparison">
       <div class="field">
         <label for="fshot">Shot type</label>
         <select id="fshot">
@@ -673,7 +695,15 @@ th[aria-sort=ascending]::after{content:" \25B2";font-size:.75em;color:var(--mute
       <div class="field cmpplayer" id="cmpplayer" hidden>
         <label for="player2">Second player</label>
         <div class="pick"><input id="q2" type="search" placeholder="Filter list" aria-label="Filter the second player list by name" autocomplete="off"><select id="player2"></select></div>
+        <label class="bestchk" id="best2w"><input type="checkbox" id="best2"> <span id="best2l">Show the second player’s best season</span></label>
       </div>
+      <fieldset class="seg" id="cmpview" hidden>
+        <legend>Comparison view</legend>
+        <div class="segbtns">
+          <label><input type="radio" name="cmpview" value="side" checked><span>Side by side</span></label>
+          <label><input type="radio" name="cmpview" value="diff"><span>Difference map</span></label>
+        </div>
+      </fieldset>
       <button type="button" class="linkbtn" id="freset">Reset filters</button>
       <p class="cmpnote" id="cmpnote" aria-live="polite"></p>
     </div>
@@ -682,7 +712,7 @@ th[aria-sort=ascending]::after{content:" \25B2";font-size:.75em;color:var(--mute
 
   <section class="stage" id="stage">
     <div class="card courtcard">
-      <div class="who"><h2 id="pname">&nbsp;</h2><p id="pmeta">&nbsp;</p><p class="asof" id="asof"></p><p class="xl" id="xl"></p><div class="badges" id="badges"></div><p class="bhint" id="bhint"></p><p class="btip" id="btip" aria-live="polite"></p></div>
+      <div class="who"><h2 id="pname">&nbsp;</h2><p id="pmeta">&nbsp;</p><div class="arc" id="arc"></div><p class="asof" id="asof"></p><p class="xl" id="xl"></p><div class="badges" id="badges"></div><p class="bhint" id="bhint"></p><p class="btip" id="btip" aria-live="polite"></p></div>
       <div class="charts" id="charts">
         <figure class="chartfig" id="figA">
           <figcaption id="capA" hidden></figcaption>
@@ -924,8 +954,18 @@ var LABEL = CEN.map(function(a){ return [a[0]/a[2], a[1]/a[2]]; });
 LABEL[0] = [0, 7.5]; LABEL[1] = [0, 11.4];
 
 /* ---------- state ---------- */
-var S = {pid:null, season:ALL_KEYS[0], type:'reg', metric:'diff', dots:false,
-  f:{loc:'all', shot:'all', create:'all', last:0}, cmp:{mode:'none', pid:null}};
+var S = {pid:null, season:ALL_KEYS[0], type:'reg', metric:'diff', dots:false, best:false, backSeason:null, cmpView:'side',
+  f:{loc:'all', shot:'all', create:'all', last:0}, cmp:{mode:'none', pid:null, best:false}};
+/* each player's best season by the MVP formula, computed by the build: pid -> [season, score, (1 if no season met the ladder minimums)] */
+var BEST = D.best || {};
+function bestOf(pid){ var b = pid == null ? null : BEST[String(pid)]; return b ? {key:String(b[0]), score:b[1], fallback:!!b[2]} : null; }
+function firstName(pid){ var nm = D.names[String(pid)] || ''; return nm.split(' ')[0] || 'the player'; }
+function seasonLabelOf(k){ return SEASONS[k] ? SEASONS[k].label : ARCH.has(k) ? ARCH.label(k) : k; }
+function bestTip(pid){
+  var b = bestOf(pid); if (!b) return 'No season on file with at least 20 games for '+firstName(pid)+'.';
+  return (b.fallback ? firstName(pid)+' never met the MVP ladder\u2019s minimums (70% of the team\u2019s games and 25 minutes a game), so this is the best of the seasons with at least 20 games: ' : 'Best season by the MVP formula: ')+
+    seasonLabelOf(b.key)+', score '+b.score.toFixed(1)+' (Game Score per game plus '+(10 * (D.bestBeta || 0.2)).toFixed(1)+' for every 10 points of the team\u2019s winning percentage above .500, each season on its own).';
+}
 var plist = [], cache = {}, viewA = null, viewB = null;
 var SHOT_MASK = {all:0, rim:(1<<4)|(1<<5)|(1<<6), jump:1<<1, pull:1<<2, float:1<<3};
 var CREATE_LABEL = {cs:'catch-and-shoot style jump shots', dribble:'shots off the dribble'};
@@ -944,7 +984,8 @@ function prevSeasonKey(){
 
 /* ---------- tallying ---------- */
 function tally(keys, pid, type, f, shots){
-  var fgm = new Float64Array(NZ), fga = new Float64Array(NZ), ast = new Float64Array(NZ), tot = [0,0,0,0], seen = {};
+  var fgm = new Float64Array(NZ), fga = new Float64Array(NZ), ast = new Float64Array(NZ), xp = new Float64Array(NZ), tot = [0,0,0,0], seen = {};
+  var XB = pid != null ? leagueBuckets(keys, type) : null;
   var L = LUT, tmask = SHOT_MASK[f.shot] || 0, needLoc = f.loc !== 'all', homeWant = f.loc === 'home' ? 1 : 0, allowed = null, crt = f.create || 'all', needCreate = crt !== 'all', wantCS = crt === 'cs';
   function slice(Sx, p){
     var a = p.off, b = p.off + p.nr + p.np;
@@ -974,7 +1015,7 @@ function tally(keys, pid, type, f, shots){
         if (allowed && !allowed[sr + (e&255)]) continue;
         var v = arr[i], cy = v % 95, q = (v-cy)/95, cx = q % 101, m = (q-cx)/101;
         var three = m & 1, made = m >> 1, z = L[(three*101+cx)*95+cy];
-        fga[z]++; tot[1]++;
+        fga[z]++; tot[1]++; if (XB) xp[z] += XB[z*16 + ((e>>10)&7)*2 + ((e>>13)&1)];
         if (made){ fgm[z]++; tot[0]++; if ((e>>9)&1) ast[z]++; }
         if (three){ tot[3]++; if (made) tot[2]++; }
         if (shots) shots.push([cx, cy, made]);
@@ -982,7 +1023,29 @@ function tally(keys, pid, type, f, shots){
       }
     });
   });
-  return {fgm:fgm, fga:fga, ast:ast, tot:tot, games:Object.keys(seen).length};
+  return {fgm:fgm, fga:fga, ast:ast, xp:xp, tot:tot, games:Object.keys(seen).length};
+}
+function xrate(p, z){ return p.xp && p.fga[z] ? p.xp[z]/p.fga[z] : null; }
+function xtot(p){ if (!p.xp) return null; var s = 0, n = 0; for (var z=0;z<NZ;z++){ s += p.xp[z]; n += p.fga[z]; } return n ? s/n : null; }
+/* expected FG%: the league's conversion rate on the same kind of shot (zone, shot type and catch-and-shoot or off the dribble), per season set and game type */
+function leagueBuckets(keys, type){
+  var key = 'xb|'+keys.join()+'|'+type; if (cache[key]) return cache[key];
+  var made = new Float64Array(NZ*16), att = new Float64Array(NZ*16), L = LUT;
+  keys.forEach(function(k){
+    var Sx = SEASONS[k], arr = Sx.arr, ex = Sx.ex;
+    Sx.players.forEach(function(p){
+      if (p.pid === AVG_PID) return;
+      var a = p.off, b = p.off + p.nr + p.np; if (type==='reg') b = p.off + p.nr; else if (type==='po') a = p.off + p.nr;
+      for (var i=a;i<b;i++){
+        var e = ex ? ex[i] : 0, v = arr[i], cy = v % 95, q = (v-cy)/95, cx = q % 101, m = (q-cx)/101, z = L[((m & 1)*101+cx)*95+cy];
+        var bk = z*16 + ((e>>10)&7)*2 + ((e>>13)&1); att[bk]++; if (m >> 1) made[bk]++;
+      }
+    });
+  });
+  var x = new Float64Array(NZ*16), zm = new Float64Array(NZ), za = new Float64Array(NZ), bk2;
+  for (bk2=0;bk2<NZ*16;bk2++){ zm[Math.floor(bk2/16)] += made[bk2]; za[Math.floor(bk2/16)] += att[bk2]; }
+  for (bk2=0;bk2<NZ*16;bk2++){ var zz = Math.floor(bk2/16), zr = za[zz] ? zm[zz]/za[zz] : 0; x[bk2] = (made[bk2] + 25*zr) / (att[bk2] + 25); }   /* thin buckets lean on the zone rate */
+  return cache[key] = x;
 }
 function leagueFor(keys, type, f){
   var key = keys.join()+'|'+type+'|'+f.loc+'|'+f.shot+'|'+(f.create || 'all');
@@ -1131,6 +1194,13 @@ function makeChart(cv, box, tip, emptyEl){
         } else if (metric==='ppsval'){
           var t3 = Math.max(-1, Math.min(1, (ZVAL[z]*m/n - base)/0.25));
           rgb = t3>=0 ? THEME.hot : THEME.cold; al = 0.82*Math.pow(Math.abs(t3),0.85);
+        } else if (metric==='xdiff'){
+          var xr = xrate(view.p, z); if (xr === null) xr = lr;
+          var shx = (m + SHRINK*xr)/(n+SHRINK), t5 = Math.max(-1, Math.min(1, (shx-xr)/0.10));
+          rgb = t5>=0 ? THEME.hot : THEME.cold; al = 0.82*Math.pow(Math.abs(t5),0.85);
+        } else if (metric==='dval'){
+          var dv = view.vals[z];
+          if (isNaN(dv)){ rgb = THEME.ink; al = 0; } else { var t6 = Math.max(-1, Math.min(1, dv/view.range)); rgb = t6>=0 ? THEME.hot : THEME.cold; al = 0.82*Math.pow(Math.abs(t6),0.85); }
         } else {
           var s = (n/tot)/(maxShare||1); rgb = THEME.freq; al = 0.82*Math.pow(s,0.9);
         }
@@ -1187,8 +1257,10 @@ function makeChart(cv, box, tip, emptyEl){
   }
   function labelText(z){
     var n = view.p.fga[z], m = view.p.fgm[z], tot = view.p.tot[1];
+    if (metric==='dval') return view.labels[z];
     if (!n) return ['\u2013', ''];
     var sub = fmtInt(m)+'/'+fmtInt(n);
+    if (metric==='xdiff'){ var xr = xrate(view.p, z); return [Math.round(100*m/n)+'%', xr===null ? sub : 'exp. '+Math.round(100*xr)+'%']; }
     if (metric==='diff') return [Math.round(100*m/n)+'%', sub];
     if (metric==='pps') return [(ZVAL[z]*m/n).toFixed(2), sub];
     if (metric==='ppsval') return [(ZVAL[z]*m/n).toFixed(2), Math.round(100*n/tot)+'% of shots'];
@@ -1241,16 +1313,20 @@ function makeChart(cv, box, tip, emptyEl){
     if (onHover) onHover(z);
   }
   function plainText(z){
+    if (view.isDiff) return view.plain[z];
     var n = view.p.fga[z], m = view.p.fgm[z], lg = view.lg, lr = lg.fga[z] ? lg.fgm[z]/lg.fga[z] : null, tot = view.p.tot[1];
     if (!n) return ZN[z]+': no shots. League FG% '+pct(lr)+'.';
     return ZN[z]+': '+fmtInt(m)+' of '+fmtInt(n)+', '+pct(m/n)+', '+(ZVAL[z]*m/n).toFixed(2)+' points per shot. League '+pct(lr)+'. '+(100*n/tot).toFixed(1)+' percent of shots.';
   }
   function tipHtml(z){
+    if (view.isDiff) return view.tips[z];
     var n = view.p.fga[z], m = view.p.fgm[z], lg = view.lg, lrz = lg.fga[z] ? lg.fgm[z]/lg.fga[z] : null, tot = view.p.tot[1], who = view.isTeam ? 'opponent shots' : view.isLeague ? 'league shots' : 'this player\u2019s shots';
     if (!n) return '<b>'+ZN[z]+'</b>No shots here.<br>League FG% '+pct(lrz);
-    var pps = ZVAL[z]*m/n, lpps = lrz==null ? null : ZVAL[z]*lrz, a = view.p.ast ? view.p.ast[z] : 0;
+    var pps = ZVAL[z]*m/n, lpps = lrz==null ? null : ZVAL[z]*lrz, a = view.p.ast ? view.p.ast[z] : 0, xr = xrate(view.p, z);
     return '<b>'+ZN[z]+'</b>'+fmtInt(m)+' of '+fmtInt(n)+' \u00B7 '+pct(m/n)+' \u00B7 '+pps.toFixed(2)+' per shot<br>League '+pct(lrz)+' \u00B7 '+(lpps==null ? '' : lpps.toFixed(2)+' per shot')+
-      (lrz!=null && !view.isLeague ? ' \u00B7 '+((m/n-lrz)>=0?'+':'')+((m/n-lrz)*100).toFixed(1)+' pts' : '')+'<br>'+(100*n/tot).toFixed(1)+'% of '+who+(m>0 && !view.isTeam && !view.isLeague ? '<br>'+Math.round(100*a/m)+'% of makes assisted' : '');
+      (lrz!=null && !view.isLeague ? ' \u00B7 '+((m/n-lrz)>=0?'+':'')+((m/n-lrz)*100).toFixed(1)+' pts' : '')+
+      (xr!==null && !view.isLeague && !view.isTeam ? '<br>Expected '+pct(xr)+' from the shot mix \u00B7 '+((m/n-xr)>=0?'+':'')+((m/n-xr)*100).toFixed(1)+' pts' : '')+
+      '<br>'+(100*n/tot).toFixed(1)+'% of '+who+(m>0 && !view.isTeam && !view.isLeague ? '<br>'+Math.round(100*a/m)+'% of makes assisted' : '');
   }
   function showTip(z, x, y, rect){
     tip.innerHTML = tipHtml(z); tip.style.opacity = 1;
@@ -1295,6 +1371,27 @@ function makeChart(cv, box, tip, emptyEl){
 var chartA = makeChart(document.getElementById('court'), document.getElementById('box'), document.getElementById('tip'), document.getElementById('empty'));
 var chartB = makeChart(document.getElementById('court2'), document.getElementById('box2'), document.getElementById('tip2'), document.getElementById('empty2'));
 function metricB(){ return S.cmp.mode === 'league' ? 'ppsval' : S.metric; }
+/* the difference map: one court colored by A minus B in each zone, for the metric in use */
+function diffView(A, B, metric){
+  var vals = new Float64Array(NZ), labels = [], tips = [], plain = [], range = metric==='pps' ? 0.20 : metric==='freq' ? 0.06 : 0.10;
+  var nameA = A.rec ? A.rec.name : 'A', nameB = B.isLeague ? 'League average' : (B.rec ? B.rec.name : 'B'), sA = shortName(A), sB = shortName(B);
+  var totA = A.p.tot[1] || 1, totB = B.p.tot[1] || 1;
+  function f1(v){ return (v>=0?'+':'')+(100*v).toFixed(1); }
+  for (var z=0;z<NZ;z++){
+    var nA = A.p.fga[z], nB = B.p.fga[z], mA = A.p.fgm[z], mB = B.p.fgm[z], vA = NaN, vB = NaN, big = '\u2013', sub = '';
+    if (metric==='freq'){ vA = nA/totA; vB = nB/totB; sub = sA+' '+(100*vA).toFixed(1)+'% \u00B7 '+sB+' '+(100*vB).toFixed(1)+'%'; }
+    else if (metric==='pps'){ if (nA) vA = ZVAL[z]*mA/nA; if (nB) vB = ZVAL[z]*mB/nB; sub = sA+' '+(nA?vA.toFixed(2):'\u2013')+' \u00B7 '+sB+' '+(nB?vB.toFixed(2):'\u2013'); }
+    else if (metric==='xdiff'){ var xA = xrate(A.p, z), xB = xrate(B.p, z); if (nA && xA!==null) vA = mA/nA - xA; if (B.isLeague) vB = nB ? 0 : NaN; else if (nB && xB!==null) vB = mB/nB - xB; sub = sA+' '+(isNaN(vA)?'\u2013':f1(vA))+' \u00B7 '+sB+' '+(isNaN(vB)?'\u2013':f1(vB)); }
+    else { if (nA) vA = mA/nA; if (nB) vB = mB/nB; sub = sA+' '+(nA?Math.round(100*vA)+'%':'\u2013')+' \u00B7 '+sB+' '+(nB?Math.round(100*vB)+'%':'\u2013'); }
+    var d = (isNaN(vA) || isNaN(vB)) ? NaN : vA - vB; vals[z] = d;
+    if (!isNaN(d)) big = metric==='pps' ? (d>=0?'+':'')+d.toFixed(2) : f1(d);
+    labels.push([big, sub]);
+    var what = metric==='freq' ? 'share of shots' : metric==='pps' ? 'points per shot' : metric==='xdiff' ? 'FG% above expected' : 'FG%';
+    tips.push('<b>'+ZN[z]+'</b>'+(isNaN(d) ? 'Not enough shots to compare.' : esc(sA)+' minus '+esc(sB)+': '+big+(metric==='pps' ? ' per shot' : metric==='freq' ? ' pts of share' : ' pts')+'<br>'+esc(sub)+'<br>'+fmtInt(mA)+'/'+fmtInt(nA)+' vs. '+fmtInt(mB)+'/'+fmtInt(nB)+' attempts'));
+    plain.push(ZN[z]+': '+(isNaN(d) ? 'not enough shots to compare.' : sA+' minus '+sB+' in '+what+', '+big+'. '+sub+'.'));
+  }
+  return {isDiff:true, p:A.p, lg:A.lg, vals:vals, range:range, labels:labels, tips:tips, plain:plain, shots:[], rec:{name:nameA+' minus '+nameB, team:''}, label:A.label === B.label ? A.label : A.label+' vs. '+B.label};
+}
 
 /* ---------- badges ---------- */
 var AW = {};
@@ -1422,6 +1519,31 @@ function filterText(f){
   if (f.last > 0) bits.push('last ' + f.last + ' games');
   return bits;
 }
+var ARC = D.arc || {};
+/* the career arc: the MVP formula's score for every season with 20 or more games, best season filled, the season on screen ringed; click a dot to show that season */
+function renderArc(pid){
+  var box = document.getElementById('arc'), rows = pid == null ? null : ARC[String(pid)];
+  if (!rows || rows.length < 2){ box.innerHTML = ''; return; }
+  var b = bestOf(pid), bestK = b ? +b.key : null, cur = S.season === 'all' ? null : +S.season;
+  var W = 460, H = 64, padL = 8, padR = 8, top = 10, bot = 18, n = rows.length;
+  var ys = rows.map(function(r){ return r[1]; }), lo = Math.min.apply(null, ys), hi = Math.max.apply(null, ys); if (hi - lo < 4){ var mid = (hi + lo) / 2; lo = mid - 2; hi = mid + 2; }
+  var X = function(i){ return n === 1 ? W/2 : padL + i * (W - padL - padR) / (n - 1); }, Y = function(v){ return top + (hi - v) * (H - top - bot) / (hi - lo); };
+  var pts = rows.map(function(r, i){ return X(i).toFixed(1)+','+Y(r[1]).toFixed(1); }).join(' ');
+  var s = '<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Career arc: MVP-formula score by season">';
+  s += '<polyline class="ln" points="'+pts+'"/>';
+  rows.forEach(function(r, i){
+    var k = r[0], lab = (k-1)+'-'+String(k).slice(2), cls = 'dt'+(k === bestK ? ' best' : '')+(k === cur ? ' cur' : ''), can = SEASONS[String(k)] || ARCH.has(String(k));
+    s += '<circle class="'+cls+'" cx="'+X(i).toFixed(1)+'" cy="'+Y(r[1]).toFixed(1)+'" r="'+(k === bestK ? 5 : 3.5)+'"'+(can ? ' data-k="'+k+'" tabindex="0" role="button"' : '')+'><title>'+lab+': '+r[1].toFixed(1)+(k === bestK ? ' (best season)' : '')+(can ? '. Click to show this season.' : '')+'</title></circle>';
+  });
+  var first = rows[0][0], last = rows[n-1][0];
+  s += '<text x="'+padL+'" y="'+(H-3)+'" text-anchor="start">'+((first-1)+'-'+String(first).slice(2))+'</text>';
+  if (n > 1) s += '<text x="'+(W-padR)+'" y="'+(H-3)+'" text-anchor="end">'+((last-1)+'-'+String(last).slice(2))+'</text>';
+  if (bestK !== null){ var bi = rows.map(function(r){ return r[0]; }).indexOf(bestK); if (bi >= 0){ var bx = X(bi), anchor = bx < 60 ? 'start' : bx > W - 60 ? 'end' : 'middle'; s += '<text class="v" x="'+bx.toFixed(1)+'" y="'+Math.max(9, Y(rows[bi][1]) - 9).toFixed(1)+'" text-anchor="'+anchor+'">'+rows[bi][1].toFixed(1)+'</text>'; } }
+  s += '</svg><p class="cap">Career arc: MVP-formula score by season ('+n+' seasons with 20+ games)'+(bestK !== null ? ', best season filled' : '')+'. Click a dot to show that season.</p>';
+  box.innerHTML = s;
+}
+document.getElementById('arc').addEventListener('click', function(e){ var c = e.target.closest ? e.target.closest('[data-k]') : null; if (c){ seasonSel.value = c.getAttribute('data-k'); seasonSel.dispatchEvent(new Event('change')); } });
+document.getElementById('arc').addEventListener('keydown', function(e){ if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('[data-k]')){ e.preventDefault(); seasonSel.value = e.target.getAttribute('data-k'); seasonSel.dispatchEvent(new Event('change')); } });
 function renderHeader(){
   var A = viewA, po = A.rec, tot = A.p.tot, f = S.f;
   var typeTxt = S.type==='reg' ? 'regular season' : S.type==='po' ? 'playoffs' : 'regular season and playoffs';
@@ -1432,6 +1554,7 @@ function renderHeader(){
   var cur = SEASONS[SEASON_KEYS[0]], inCur = S.season==='all' || S.season===SEASON_KEYS[0];
   var dt = new Date(cur.asof+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   document.getElementById('asof').textContent = inCur ? (cur.label+' data through '+dt+' ('+cur.games+(cur.games===1?' game':' games')+(cur.games<100?', small sample':'')+')') : '';
+  renderArc(po ? S.pid : null);
   var bhtml = po ? badgesFor(S.pid) : '';
   document.getElementById('badges').innerHTML = bhtml;
   document.getElementById('bhint').textContent = bhtml ? 'Gold badges are league awards. A number is the player\u2019s league rank (top 10) in that category. Hover or tap a badge for details.' : '';
@@ -1459,6 +1582,8 @@ function renderKpis(){
   html += kpiTile(gpLabel, gpn ? fmtInt(gpn) : '\u2013', gpn ? (tot[1]/gpn).toFixed(1)+' shots per game' : 'no games in this selection');
   html += kpiTile('Field goals', empty?'\u2013':fmtInt(tot[0])+'/'+fmtInt(tot[1]), 'made / attempted'+(B ? vsB(fmtInt(B.p.tot[0])+'/'+fmtInt(B.p.tot[1])) : ''));
   html += kpiTile('FG%', pct(pr.fg), (B && !B.isLeague ? 'League '+pct(lr.fg)+vsB(pct(pb.fg)) : 'League '+pct(lr.fg)+' \u00B7 '+diffSpan(pr.fg!=null?pr.fg-lr.fg:null,' pts')));
+  var xA = xtot(A.p), xB = B && !B.isLeague ? xtot(B.p) : null;
+  if (xA !== null && pr.fg !== null) html += kpiTile('FG% vs. expected', diffSpan(pr.fg - xA, ' pts'), 'Expected '+pct(xA)+' from the shot mix'+(B && xB !== null && pb.fg !== null ? vsB(diffSpan(pb.fg - xB, ' pts')) : ''));
   html += kpiTile('3-point', empty?'\u2013':fmtInt(tot[2])+'/'+fmtInt(tot[3]), pct(pr.tp)+' \u00B7 League '+pct(lr.tp)+(B ? vsB(pct(pb.tp)) : ''));
   html += kpiTile('eFG%', pct(pr.efg), 'League '+pct(lr.efg)+(B ? vsB(pct(pb.efg)) : ' \u00B7 '+diffSpan(pr.efg!=null?pr.efg-lr.efg:null,' pts')));
   var ppsT = '\u2013', ppsC = 'League '+(lr.pps==null ? '\u2013' : lr.pps.toFixed(2));
@@ -1508,13 +1633,19 @@ function renderTable(){
     tr.addEventListener('mouseleave', function(){ chartA.setHover(-1); chartB.setHover(-1); });
   });
 }
-function shortName(v){ if (v.isLeague) return 'League'; var s = v.rec ? v.rec.name.split(' ').slice(-1)[0] : ''; return S.cmp.mode==='prev' ? s+' '+v.label : s; }
+function shortName(v){ if (v.isLeague) return 'League'; var s = v.rec ? v.rec.name.split(' ').slice(-1)[0] : ''; return (viewA && v.label !== viewA.label) ? s+' '+v.label : s; }
 function legendHtml(metric, who){
   if (metric==='diff'){
     return '<div class="ends"><span>Below league FG%</span><span>League average</span><span>Above league FG%</span></div>'+
       '<div class="bar" style="background:linear-gradient(90deg,'+rgba(THEME.cold,.82)+','+rgba(THEME.cold,0)+' 50%,'+rgba(THEME.hot,0)+' 50%,'+rgba(THEME.hot,.82)+')"></div>'+
       '<div class="ends"><span>-10 pts or more</span><span></span><span>+10 pts or more</span></div>'+
       '<p>Big number: FG% in the zone. Small number: made/attempted.</p>';
+  }
+  if (metric==='xdiff'){
+    return '<div class="ends"><span>Below expected FG%</span><span>As expected</span><span>Above expected FG%</span></div>'+
+      '<div class="bar" style="background:linear-gradient(90deg,'+rgba(THEME.cold,.82)+','+rgba(THEME.cold,0)+' 50%,'+rgba(THEME.hot,0)+' 50%,'+rgba(THEME.hot,.82)+')"></div>'+
+      '<div class="ends"><span>-10 pts or more</span><span></span><span>+10 pts or more</span></div>'+
+      '<p>Big number: FG% in the zone. Small number: the FG% the league converts on the same kind of shot, from the zone, shot type and whether it was catch-and-shoot or off the dribble. The gap separates shot-making from shot selection.</p>';
   }
   if (metric==='pps' || metric==='ppsval'){
     return '<div class="ends"><span>Fewer points per shot than the league</span><span>League average</span><span>More points per shot</span></div>'+
@@ -1527,7 +1658,14 @@ function legendHtml(metric, who){
     '<div class="bar" style="background:linear-gradient(90deg,'+rgba(THEME.freq,0)+','+rgba(THEME.freq,.82)+')"></div>'+
     '<p>Big number: share of '+(who||'the player\u2019s')+' attempts from the zone. Small number: made/attempted.</p>';
 }
-function renderLegend(){ document.getElementById('legend').innerHTML = legendHtml(S.metric); }
+function renderLegend(){
+  var h = legendHtml(S.metric);
+  if (viewB && S.cmpView === 'diff'){
+    var what = S.metric==='freq' ? 'share of shots' : S.metric==='pps' ? 'points per shot' : S.metric==='xdiff' ? 'FG% above expected' : 'FG%';
+    h += '<p><b>Difference map (right):</b> '+esc(shortName(viewA))+' minus '+esc(shortName(viewB))+' in '+what+', zone by zone. Warm where '+esc(shortName(viewA))+' is higher, cool where '+esc(shortName(viewB))+' is. Zones where either has no shots stay blank.</p>';
+  }
+  document.getElementById('legend').innerHTML = h;
+}
 function chartSummary(v){
   if (!v || !v.p.tot[1]) return 'No shots in this selection.';
   var t = v.p.tot, best = -9, worst = 9, bz = -1, wz = -1, most = 0, mz = -1, z;
@@ -1584,9 +1722,15 @@ function update(){
   if (update._pid !== S.pid){ badgeAll = false; update._pid = S.pid; }
   var keys = keysFor(), specA = {pid:S.pid, keys:keys, type:S.type, f:S.f};
   viewA = S.pid==null ? emptyView() : buildView(specA, S.dots);
-  viewB = null;
+  viewB = null; var loadingB = '';
   if (S.pid != null){
-    if (S.cmp.mode === 'player' && S.cmp.pid != null) viewB = buildView({pid:S.cmp.pid, keys:keys, type:S.type, f:S.f}, S.dots);
+    if (S.cmp.mode === 'player' && S.cmp.pid != null){
+      var keysB = keys, bb = S.cmp.best ? bestOf(S.cmp.pid) : null;
+      if (S.cmp.best && !bb) S.cmp.best = false;
+      else if (bb && ARCH.pending(bb.key)){ loadingB = 'Loading '+ARCH.label(bb.key)+' ('+(ARCH.manifest[bb.key].bytes/1e6).toFixed(1)+' MB) for '+firstName(S.cmp.pid)+'\u2019s best season\u2026'; ARCH.load(bb.key).then(update, function(e){ S.cmp.best = false; loadFail = 'Could not load '+ARCH.label(bb.key)+' ('+((e && e.message) || 'network error')+').'; update(); }); }
+      else if (bb) keysB = [bb.key];
+      viewB = buildView({pid:S.cmp.pid, keys:keysB, type:S.type, f:S.f}, S.dots);
+    }
     else if (S.cmp.mode === 'prev'){ var pk = prevSeasonKey(); if (pk) viewB = buildView({pid:S.pid, keys:[pk], type:S.type, f:S.f}, S.dots); }
     else if (S.cmp.mode === 'league') viewB = leagueView(specA);
   }
@@ -1594,14 +1738,35 @@ function update(){
   var emptyMsg = filtersActive(S.f) ? 'No shots match these filters. Try loosening one.' : 'No shots for this player in the selected games.';
   document.getElementById('empty').textContent = emptyMsg; document.getElementById('empty2').textContent = emptyMsg;
   document.getElementById('stage').classList.toggle('cmp', cmpOn);
-  document.getElementById('figB').hidden = !cmpOn;
+  document.getElementById('figB').hidden = !cmpOn; document.getElementById('cmpview').hidden = !cmpOn;
+  var showDiff = cmpOn && S.cmpView === 'diff';
   document.getElementById('capA').hidden = !cmpOn; document.getElementById('capB').hidden = !cmpOn;
-  document.getElementById('cmpnote').textContent = (S.cmp.mode==='prev' && !viewB) ? 'Pick a single season that has an earlier season on file to compare with the previous year.' : '';
-  renderPanels();
+  document.getElementById('cmpnote').textContent = loadingB || loadFail || ((S.cmp.mode==='prev' && !viewB) ? 'Pick a single season that has an earlier season on file to compare with the previous year.' : ''); loadFail = '';
+  renderPanels(); syncBestUi();
   chartA.size(); chartA.setView(viewA, {metric:S.metric, dots:S.dots});
-  if (cmpOn){ chartB.size(); chartB.setView(viewB, {metric:metricB(), dots:S.dots}); }
+  if (cmpOn){ chartB.size(); if (showDiff) chartB.setView(diffView(viewA, viewB, S.metric), {metric:'dval', dots:false}); else chartB.setView(viewB, {metric:metricB(), dots:S.dots}); }
+  if (showDiff) document.getElementById('capB').textContent = shortName(viewA)+' minus '+shortName(viewB)+' \u00B7 '+(viewA.label === viewB.label ? viewA.label : viewA.label+' vs. '+viewB.label)+' (difference map)';
 }
+var loadFail = '';
 function redraw(){ chartA.draw(); if (viewB) chartB.draw(); }
+/* the best-season checkboxes: labels, tooltips, checked and disabled states follow the state */
+function syncBestUi(){
+  var b1 = bestOf(S.pid);
+  if (S.best && (!b1 || b1.key !== S.season) && !seasonSel.disabled) S.best = false;   // the season shown is not the best one any more (a manual pick, or a load that failed); the menu is disabled only while a season is loading
+  var w1 = document.getElementById('best1w'), c1 = document.getElementById('best1');
+  document.getElementById('best1l').textContent = 'Show '+firstName(S.pid)+'\u2019s Best Season';
+  c1.checked = S.best; c1.disabled = !b1; w1.classList.toggle('off', !b1); w1.title = bestTip(S.pid);
+  var b2 = S.cmp.mode === 'player' && S.cmp.pid != null ? bestOf(S.cmp.pid) : null, w2 = document.getElementById('best2w'), c2 = document.getElementById('best2');
+  document.getElementById('best2l').textContent = 'Show '+firstName(S.cmp.pid)+'\u2019s Best Season';
+  c2.checked = S.cmp.best && !!b2; c2.disabled = !b2; w2.classList.toggle('off', !b2); w2.title = S.cmp.pid == null ? '' : bestTip(S.cmp.pid);
+}
+/* jump the season menu to the selected player's best season, loading it first if it is archived (the menu's own handler does the loading) */
+function goBestSeason(){
+  var b = bestOf(S.pid);
+  if (!b){ S.best = false; syncBestUi(); return false; }
+  if (b.key === S.season){ syncBestUi(); return false; }
+  seasonSel.value = b.key; seasonSel.dispatchEvent(new Event('change')); return true;
+}
 
 /* ---------- wiring ---------- */
 (function(){
@@ -1631,8 +1796,13 @@ function ensureSecond(){
 var seasonSel = document.getElementById('season');
 seasonSel.innerHTML = ARCH.options(ALL_KEYS, function(k){ return '<option value="'+k+'">'+SEASONS[k].label+(k===ALL_KEYS[0]?' (in progress)':'')+'</option>'; }, '<option value="all">'+(ARCH.keys().length ? 'Last five seasons' : 'All seasons')+'</option>');
 ARCH.wire(seasonSel, function(){ return S.season; }, function(v){ S.season = v; rebuildAll(); });
-document.getElementById('player').addEventListener('change', function(e){ S.pid = +e.target.value; badgeAll = false; if (S.cmp.mode==='player' && S.cmp.pid===S.pid){ S.cmp.pid = null; ensureSecond(); fillSelect('player2','q2',function(){ return S.cmp.pid; }, setSel2); } update(); });
-document.getElementById('q').addEventListener('input', function(){ var had = fillSelect('player', 'q', function(){ return S.pid; }, setSel1); if (!had) update(); });
+document.getElementById('player').addEventListener('change', function(e){ S.pid = +e.target.value; badgeAll = false; if (S.cmp.mode==='player' && S.cmp.pid===S.pid){ S.cmp.pid = null; ensureSecond(); fillSelect('player2','q2',function(){ return S.cmp.pid; }, setSel2); } if (S.best && goBestSeason()){ if (seasonSel.disabled) update(); return; } update(); });
+document.getElementById('best1').addEventListener('change', function(e){
+  if (e.target.checked){ S.backSeason = S.season; S.best = true; if (!goBestSeason() || seasonSel.disabled) update(); }
+  else { S.best = false; var back = S.backSeason; S.backSeason = null; if (back && back !== S.season && (back === 'all' || SEASONS[back])){ seasonSel.value = back; seasonSel.dispatchEvent(new Event('change')); } else update(); }
+});
+document.getElementById('best2').addEventListener('change', function(e){ S.cmp.best = e.target.checked; update(); });
+document.getElementById('q').addEventListener('input', function(){ var had = fillSelect('player', 'q', function(){ return S.pid; }, setSel1); if (!had){ if (S.best && goBestSeason()){ if (seasonSel.disabled) update(); return; } update(); } });
 document.getElementById('player2').addEventListener('change', function(e){ S.cmp.pid = +e.target.value; update(); });
 document.getElementById('q2').addEventListener('input', function(){ var had = fillSelect('player2', 'q2', function(){ return S.cmp.pid; }, setSel2); if (!had) update(); });
 Array.prototype.forEach.call(document.querySelectorAll('input[name=type]'), function(el){
@@ -1648,6 +1818,21 @@ Array.prototype.forEach.call(document.querySelectorAll('input[name=create]'), fu
   el.addEventListener('change', function(){ if (el.checked){ S.f.create = el.value; update(); } });
 });
 document.getElementById('fshot').addEventListener('change', function(e){ S.f.shot = e.target.value; update(); });
+Array.prototype.forEach.call(document.querySelectorAll('input[name=cmpview]'), function(el){
+  el.addEventListener('change', function(){ if (el.checked){ S.cmpView = el.value; update(); } });
+});
+(function(){
+  var btn = document.getElementById('ftoggle'), ctl = document.querySelector('.controls');
+  function setOpen(on){ ctl.classList.toggle('showf', on); btn.setAttribute('aria-expanded', on ? 'true' : 'false'); btn.textContent = 'Filters and comparison '+(on ? '\u25B4' : '\u25BE'); }
+  btn.addEventListener('click', function(){ setOpen(!ctl.classList.contains('showf')); });
+  window.NBA_SHOW_FILTERS = function(){ if (filtersActive(S.f) || S.cmp.mode !== 'none') setOpen(true); };
+})();
+/* fetch an archived best season while the pointer is on the checkbox, so the click feels instant (not on data-saver connections) */
+function prefetchBest(pid){ var b = bestOf(pid); if (b && ARCH.pending(b.key) && !(navigator.connection && navigator.connection.saveData)) ARCH.load(b.key).catch(function(){}); }
+['mouseenter', 'focusin', 'touchstart'].forEach(function(ev){
+  document.getElementById('best1w').addEventListener(ev, function(){ prefetchBest(S.pid); }, {passive:true});
+  document.getElementById('best2w').addEventListener(ev, function(){ if (S.cmp.mode === 'player') prefetchBest(S.cmp.pid); }, {passive:true});
+});
 document.getElementById('flast').addEventListener('change', function(e){ S.f.last = +e.target.value; update(); });
 function syncCmpUi(){
   document.getElementById('cmpmode').value = S.cmp.mode;
@@ -1655,11 +1840,11 @@ function syncCmpUi(){
 }
 document.getElementById('cmpmode').addEventListener('change', function(e){
   S.cmp.mode = e.target.value;
-  if (S.cmp.mode === 'player'){ ensureSecond(); fillSelect('player2', 'q2', function(){ return S.cmp.pid; }, setSel2); }
+  if (S.cmp.mode === 'player'){ ensureSecond(); fillSelect('player2', 'q2', function(){ return S.cmp.pid; }, setSel2); } else S.cmp.best = false;
   syncCmpUi(); update();
 });
 document.getElementById('freset').addEventListener('click', function(){
-  S.f = {loc:'all', shot:'all', create:'all', last:0}; S.cmp = {mode:'none', pid:null};
+  S.f = {loc:'all', shot:'all', create:'all', last:0}; S.cmp = {mode:'none', pid:null, best:false};
   document.getElementById('fshot').value = 'all'; document.getElementById('flast').value = '0';
   Array.prototype.forEach.call(document.querySelectorAll('input[name=loc]'), function(el){ el.checked = el.value === 'all'; });
   Array.prototype.forEach.call(document.querySelectorAll('input[name=create]'), function(el){ el.checked = el.value === 'all'; });
@@ -1668,7 +1853,7 @@ document.getElementById('freset').addEventListener('click', function(){
 document.getElementById('dots').addEventListener('change', function(e){ S.dots = e.target.checked; update(); });
 document.getElementById('twins').addEventListener('click', function(e){
   var c = e.target.closest ? e.target.closest('[data-cmp]') : null;
-  if (c){ S.cmp.mode = 'player'; S.cmp.pid = +c.getAttribute('data-cmp'); syncCmpUi(); fillSelect('player2', 'q2', function(){ return S.cmp.pid; }, setSel2); update(); window.scrollTo({top:0, behavior:'smooth'}); }
+  if (c){ S.cmp.mode = 'player'; S.cmp.pid = +c.getAttribute('data-cmp'); syncCmpUi(); fillSelect('player2', 'q2', function(){ return S.cmp.pid; }, setSel2); update(); if (window.NBA_SHOW_FILTERS) window.NBA_SHOW_FILTERS(); window.scrollTo({top:0, behavior:'smooth'}); }
 });
 chartA.setOnHover(function(z){ Array.prototype.forEach.call(document.querySelectorAll('#ztable tbody tr'), function(tr){ tr.classList.toggle('on', +tr.dataset.z===z); }); document.getElementById('zlive').textContent = z >= 0 ? chartA.plainText(z) : ''; });
 
@@ -1701,7 +1886,7 @@ function openPlayer(pid, opts){
     var any = SEASON_KEYS.filter(function(k){ return SEASONS[k].idx.has(pid); });
     want = any.length ? any[0] : 'all';
   }
-  S.season = want; S.pid = pid; S.cmp = {mode:'none', pid:null};
+  S.season = want; S.pid = pid; S.cmp = {mode:'none', pid:null, best:false}; S.best = false; S.backSeason = null;
   if (!opts.keep){
     S.type = 'reg'; S.f = {loc:'all', shot:'all', create:'all', last:0};
     document.getElementById('fshot').value = 'all'; document.getElementById('flast').value = '0';
@@ -1852,8 +2037,9 @@ function renderBanners(){
   var txt = L.maxg < 20 ? 'Early season: no team has played more than '+L.maxg+' games, so every list here is a small sample and will keep reshuffling. This notice goes away after 20 team games.' : '';
   ['sb-l','sb-a','sb-t'].forEach(function(id){ var el = document.getElementById(id); if (el){ el.textContent = txt; el.hidden = !txt; } });
 }
+function favName(){ var f = window.NBA_FAV || 'MEM'; return f === 'MEM' ? 'Grizzlies' : ((window.NBA_LIB && window.NBA_LIB.TEAMS && window.NBA_LIB.TEAMS[f]) || f); }
 function renderMeta(){
-  document.getElementById('lede').textContent = 'Top 10 in each major category for the '+seasonLabel(L.key || '2027')+' regular season, through '+fmtDate(L.asof)+' ('+L.games+' games). Grizzlies players are shaded.';
+  document.getElementById('lede').textContent = 'Top 10 in each major category for the '+seasonLabel(L.key || '2027')+' regular season, through '+fmtDate(L.asof)+' ('+L.games+' games). '+favName()+' players are shaded.';
   document.getElementById('lnote').innerHTML =
     '<p><b>Who qualifies.</b> Per-game lists include players who have appeared in at least 70% of their team\u2019s games so far. Percentage lists need a minimum number of made shots (300 field goals, 82 threes and 125 free throws over a full season), scaled to the games played so far, which is why early-season lists can include small samples. Season totals have no minimum. Ties share a rank.</p>'+
     '<p><b>Points per shot</b> is field-goal points divided by field-goal attempts (free throws left out), which is twice a player\u2019s effective field goal percentage, and it uses the same made-shot minimum as field goal %. <b>Points per 36 minutes</b> is points scaled to a 36-minute workload; it needs 70% of team games and at least 15 minutes a game, so a player with a few garbage-time minutes cannot top it. Both are rates, so they stay the same whether the toggle is on Per game or Season totals.</p>'+
@@ -1897,8 +2083,17 @@ var AWD = {};
 try { AWD = JSON.parse(document.getElementById('awards-data').textContent) || {}; } catch (e) {}
 var SEAS_KEYS = Object.keys(SD).sort();
 var CUR = L.key || '2027';
-var MV = {K:10, KT:15, BETA:0.2, HW:[5,3,2], GCAP:60};
-var DEFM = {"cols": ["blk", "stl", "dreb", "mpg", "tdef", "rep"], "mu": [0.5587597905935625, 0.9186727034058602, 3.8577685076090176, 28.996832547779064, 0.12793391409123347, 0.06948640483383686], "sd": [0.5199511471018817, 0.38404433437114804, 1.7821840323279285, 5.196499224884956, 2.972980607742158, 0.25427946117826244], "w": [0.6220061580609262, 0.7391332305127692, 0.09028881251506148, 0.20450425491746396, 0.8865693712500838, 0.5454415515873781]}, DEFM_STATS = {"cols": ["blk", "stl", "dreb", "mpg", "tdef"], "mu": [0.5587597905935625, 0.9186727034058602, 3.8577685076090176, 28.996832547779064, 0.12793391409123347], "sd": [0.5199511471018817, 0.38404433437114804, 1.7821840323279285, 5.196499224884956, 2.972980607742158], "w": [0.7931690661491202, 1.0374340140889164, 0.2722576025867873, 0.2606823691412689, 1.2042633847426458]}, DEFM_RIM = {"cols": ["blk", "stl", "dreb", "mpg", "tdef", "rimds", "rimdfg", "drapm"], "mu": [0.5425693223668828, 0.9069554997581005, 3.9677247669650257, 28.398127236730137, 0.19593862997995373, -0.0006099773291599883, -0.0012947314180549434, 0.24463028816676904], "sd": [0.4506449958188432, 0.3449822008210549, 1.809595687162661, 4.6717633695717815, 2.804242089214724, 0.016846474815863717, 0.022477496593410872, 1.5070189148942454], "w": [0.6836778524570947, 0.8698948948340096, 0.13652426979342214, 0.2607349175344463, 0.823845791972725, 0.4358989386941464, 0.16430226888561109, 0.6991059339118112]}, defMode = 'ballot';   // fitted offline (static/defmodel.json): the ballot model on All-Defensive vote shares of 2003-04 to 2025-26, the other two on the real teams
+var AWF = L.awardfit || {};   /* fitted on the real voting (static/awardfit.json): team-record weights and vote-share temperatures */
+var MV = {K:10, KT:15, BETA:(AWF.mvp && AWF.mvp.beta) || 0.2, BETA_SMOY:(AWF.smoy && AWF.smoy.beta) || 0.2, HW:[5,3,2], GCAP:60};
+/* a ladder's scores as predicted shares of the vote: a within-season softmax with the award's fitted temperature; null when the award has none */
+function voteShares(list, award){
+  var tau = AWF[award] && AWF[award].tau; if (!tau || !list.length) return null;
+  var mx = list[0].score, w = list.map(function(r){ return Math.exp((r.score - mx) / tau); }), z = w.reduce(function(a, b){ return a + b; }, 0);
+  return w.map(function(v){ return v / z; });
+}
+function sharePct(s){ return s == null ? '' : s >= 0.995 ? '99%+' : s < 0.095 ? (100 * s).toFixed(1) + '%' : Math.round(100 * s) + '%'; }
+function shareTxt(award){ return AWF[award] && AWF[award].tau ? ' Percentages are the model\u2019s estimate of each player\u2019s share of the vote if the season ended today, calibrated on the real voting since 2003-04.' : ''; }
+var DEFM = {"cols": ["blk", "stl", "dreb", "mpg", "tdef", "rep"], "mu": [0.5587597905935625, 0.9186727034058602, 3.8577685076090176, 28.996832547779064, 0.12793391409123347, 0.06948640483383686], "sd": [0.5199511471018817, 0.38404433437114804, 1.7821840323279285, 5.196499224884956, 2.972980607742158, 0.25427946117826244], "w": [0.6220061580609262, 0.7391332305127692, 0.09028881251506148, 0.20450425491746396, 0.8865693712500838, 0.5454415515873781]}, DEFM_RECENT = {"cols": ["blk", "stl", "dreb", "mpg", "tdef", "rep", "drapm", "rimds", "rimdfg"], "mu": [0.5587555630778481, 0.9187503887041838, 3.8567786850145325, 28.992684221765593, 0.12703619500124597, 0.06942187137218482, 0.24493263931414597, -0.0006176481017981833, -0.0013093543401184763], "sd": [0.5198678334494858, 0.3841616227989006, 1.7819265863691875, 5.197914143631101, 2.97498015632855, 0.254170169664665, 1.5066548775818052, 0.016842551142848137, 0.022468480606838658], "w": [0.6169236390684594, 0.7595137025360986, 0.09158339723645725, 0.20876432106853876, 0.7530422378372488, 0.4299292601878117, 0.4938805445787968, 0.27802317703197177, 0.12049751910049263], "from": 2018}, DEFM_STATS = {"cols": ["blk", "stl", "dreb", "mpg", "tdef"], "mu": [0.5587597905935625, 0.9186727034058602, 3.8577685076090176, 28.996832547779064, 0.12793391409123347], "sd": [0.5199511471018817, 0.38404433437114804, 1.7821840323279285, 5.196499224884956, 2.972980607742158], "w": [0.7931690661491202, 1.0374340140889164, 0.2722576025867873, 0.2606823691412689, 1.2042633847426458]}, DEFM_RIM = {"cols": ["blk", "stl", "dreb", "mpg", "tdef", "rimds", "rimdfg", "drapm"], "mu": [0.5425693223668828, 0.9069554997581005, 3.9677247669650257, 28.398127236730137, 0.19593862997995373, -0.0006099773291599883, -0.0012947314180549434, 0.24463028816676904], "sd": [0.4506449958188432, 0.3449822008210549, 1.809595687162661, 4.6717633695717815, 2.804242089214724, 0.016846474815863717, 0.022477496593410872, 1.5070189148942454], "w": [0.6836778524570947, 0.8698948948340096, 0.13652426979342214, 0.2607349175344463, 0.823845791972725, 0.4358989386941464, 0.16430226888561109, 0.6991059339118112]}, defMode = 'ballot';   // fitted offline (static/defmodel.json): the ballot model on All-Defensive vote shares of 2003-04 to 2025-26 (DEFM_RECENT adds defensive RAPM and rim on/off from 2017-18), the other two on the real teams
 var basis = {mvp:true, dpoy:false, smoy:true};   // true = blend with past seasons, false = this season only
 function gameScore(p){
   return p.pts + 0.4*p.fgm - 0.7*p.fga - 0.4*(p.fta - p.ftm) + 0.7*p.oreb + 0.3*p.dreb + p.stl + 0.7*p.ast + 0.7*p.blk - 0.4*p.pf - p.tov;
@@ -1980,8 +2175,10 @@ function drapmOf(key, pid){ var r = L.rapm && L.rapm[key] ? L.rapm[key][String(p
 function dscore(key, p){
   var td = tdefMap(key)[p.team]; if (td === undefined) td = 0;
   if (defMode === 'impact'){ var v = drapmOf(key, p.pid); return v === null ? -99 : v; }
-  var rim = defMode !== 'ballot' && hasRim(key), M = defMode === 'ballot' ? DEFM : (rim ? DEFM_RIM : DEFM_STATS), x = [p.blk / p.gp, p.stl / p.gp, p.dreb / p.gp, p.min / p.gp, td], s = 0;
-  if (defMode === 'ballot') x.push(pastAllDef(key, p.pid)); else if (rim) x = x.concat(rimFeats(key, p.pid), [drapmOf(key, p.pid) || 0]);
+  var ballot = defMode === 'ballot', recent = ballot && +key >= DEFM_RECENT.from && hasRim(key), rim = !ballot && hasRim(key);
+  var M = ballot ? (recent ? DEFM_RECENT : DEFM) : (rim ? DEFM_RIM : DEFM_STATS), x = [p.blk / p.gp, p.stl / p.gp, p.dreb / p.gp, p.min / p.gp, td], s = 0;
+  if (ballot){ x.push(pastAllDef(key, p.pid)); if (recent) x = x.concat([drapmOf(key, p.pid) || 0], rimFeats(key, p.pid)); }
+  else if (rim) x = x.concat(rimFeats(key, p.pid), [drapmOf(key, p.pid) || 0]);
   for (var i = 0; i < x.length; i++) s += M.w[i] * (x[i] - M.mu[i]) / M.sd[i];
   return s;
 }
@@ -2025,7 +2222,7 @@ function smoyFor(key, blend){
   S.players.forEach(function(p){
     if (!gpOk(p,S) || p.min / p.gp < 15 || p.gst / p.gp >= 0.5) return;
     var T = teamT(key, p.team, blend), st = standOf(key, p.team), g = gameScore(p) / p.gp;
-    out.push({p:p, score:g + MV.BETA * (100 * T - 50), g:g, W:st ? st.w : 0, L:st ? st.l : 0});
+    out.push({p:p, score:g + MV.BETA_SMOY * (100 * T - 50), g:g, W:st ? st.w : 0, L:st ? st.l : 0});
   });
   return sortOut(out);
 }
@@ -2188,7 +2385,7 @@ var MVP_EXTRA = '<div class="race" id="mvp-race"></div>'+
   '<details class="mvp-how custom" id="mvp-custom"><summary>Build your own MVP formula</summary>'+
   '<p class="smn">Change what the model rewards and watch the ladder and the All-NBA teams move. The defaults are the settings that picked the real MVP in each finished season.</p>'+
   '<div class="sliders">'+
-    '<label class="sl"><span>Team success <output id="s-beta"></output></span><input type="range" id="sl-beta" min="0" max="0.5" step="0.05" value="0.2"></label>'+
+    '<label class="sl"><span>Team success <output id="s-beta"></output></span><input type="range" id="sl-beta" min="0" max="0.5" step="0.01" value="0.2"></label>'+
     '<label class="sl"><span>Past seasons counted <output id="s-k"></output></span><input type="range" id="sl-k" min="0" max="40" step="1" value="10"></label>'+
     '<label class="sl"><span>Minimum minutes <output id="s-mpg"></output></span><input type="range" id="sl-mpg" min="15" max="35" step="1" value="25"></label>'+
   '</div><p class="smn">Team success: points of score added for every 10 points of winning percentage above .500. Past seasons counted: how many games of history stand against the games played this season (0 ignores history; it needs Blend with past seasons switched on). Minimum minutes: the cutoff for who is considered.</p>'+
@@ -2211,9 +2408,13 @@ function rowHtml(o){
     '<span class="mline">'+o.line+'<span class="mparts">'+esc(o.parts)+'</span></span>'+
     '<span class="mscore">'+o.score+'<small>'+o.cap+'</small></span></li>';
 }
-function ladder(list, build, n){
-  var top = list.slice(0, n || 5), best = top.length ? top[0].score : 1, html = '';
-  top.forEach(function(r, i){ var o = build(r, i + 1); o.rk = i + 1; o.pct = best > 0 ? Math.max(8, 100 * r.score / best) : 8; o.p = r.p; html += rowHtml(o); });
+function ladder(list, build, n, award){
+  var top = list.slice(0, n || 5), best = top.length ? top[0].score : 1, html = '', sh = award ? voteShares(list, award) : null;
+  top.forEach(function(r, i){
+    var o = build(r, i + 1); o.rk = i + 1; o.pct = best > 0 ? Math.max(8, 100 * r.score / best) : 8; o.p = r.p;
+    if (sh){ if (!/score/i.test(o.parts)) o.parts += ' \u00B7 score '+r.score.toFixed(1); o.score = sharePct(sh[i]); o.cap = 'of the vote'; o.pct = Math.max(8, 100 * sh[i] / sh[0]); }
+    html += rowHtml(o);
+  });
   return html || '<li class="mrow"><span></span><span class="meta">No eligible players yet.</span></li>';
 }
 function perG(p, k){ return (p[k] / p.gp).toFixed(1); }
@@ -2226,47 +2427,48 @@ function basisTxt(avgW, blend){ return blend ? 'This season carries about '+Math
 function avgW(top){ return top.length ? top.reduce(function(s,r){ return s + (r.w === undefined ? 1 : r.w); }, 0) / top.length : 0; }
 function set(id, html, asText){ var el = document.getElementById(id); if (el) { if (asText) el.textContent = html; else el.innerHTML = html; } }
 
+function favName(){ var f = window.NBA_FAV || 'MEM'; return f === 'MEM' ? 'Grizzlies' : ((window.NBA_LIB && window.NBA_LIB.TEAMS && window.NBA_LIB.TEAMS[f]) || f); }
 function renderMvp(){
   var all = mvpFor(CUR, basis.mvp, mvpActive()), top = all.slice(0, 5), prevKey = SEAS_KEYS[SEAS_KEYS.indexOf(CUR) - 1];
-  set('mvp-sub', 'Top 5 candidates from a stat model, not a vote. '+asofTxt()+' '+basisTxt(avgW(top), basis.mvp)+(mvpIsDefault() ? '' : ' Custom formula in use.'), true);
+  set('mvp-sub', 'Top 5 candidates from a stat model, not a vote. '+asofTxt()+' '+basisTxt(avgW(top), basis.mvp)+(mvpIsDefault() ? '' : ' Custom formula in use.')+shareTxt('mvp'), true);
   set('mvp-list', ladder(all, function(r){
     return {rec:r.W+'-'+r.L, hon: prevKey ? honorsFor(prevKey, r.p.pid) : [], honLabel: prevKey ? seasonLabel(prevKey) : '',
       line: stats([[perG(r.p,'pts'),'PTS'],[perG(r.p,'reb'),'REB'],[perG(r.p,'ast'),'AST']]),
       parts: 'Game Score '+r.cur.toFixed(1)+' this season'+(basis.mvp ? (r.noHist ? ' \u00B7 no earlier seasons on file' : ' \u00B7 '+r.prior.toFixed(1)+' over the last three seasons') : '')+' \u00B7 team '+r.W+'-'+r.L,
       score:r.score.toFixed(1), cap:'score'};
-  }));
+  }, 5, 'mvp'));
   renderRace();
 }
 function renderDpoy(){
   var all = dpoyFor(CUR, basis.dpoy), top = all.slice(0, 5);
-  set('dpoy-sub', 'Top 5 from a defensive stat model. '+basisTxt(avgW(top), basis.dpoy), true);
+  set('dpoy-sub', 'Top 5 from a defensive stat model. '+basisTxt(avgW(top), basis.dpoy)+shareTxt('dpoy'), true);
   set('dpoy-list', ladder(all, function(r){
     var d = drtgOf(CUR, r.p.team), rk = drtgRank(CUR, r.p.team);
     return {rec:recOf(CUR, r.p.team),
       line: stats([[perG(r.p,'blk'),'BLK'],[perG(r.p,'stl'),'STL'],[perG(r.p,'dreb'),'DREB']]),
       parts: (d !== null ? 'Team allows '+d.toFixed(1)+' per 100 possessions (#'+rk+' of 30)' : 'Team defense unavailable')+' \u00B7 '+(r.p.min/r.p.gp).toFixed(1)+' MPG \u00B7 defensive score '+r.cur.toFixed(1)+(basis.dpoy ? (r.noHist ? ', no earlier seasons on file' : ', '+r.prior.toFixed(1)+' over the last three seasons') : ''),
       score:r.score.toFixed(1), cap:'score'};
-  }));
+  }, 5, 'dpoy'));
 }
 function renderRoy(){
   var all = royFor(CUR, true);
-  set('roy-sub', 'Top 5 rookies, ranked on production alone. '+asofTxt(), true);
+  set('roy-sub', 'Top 5 rookies, ranked on production alone. '+asofTxt()+shareTxt('roy'), true);
   set('roy-list', ladder(all, function(r){
     return {rec:recOf(CUR, r.p.team),
       line: stats([[perG(r.p,'pts'),'PTS'],[perG(r.p,'reb'),'REB'],[perG(r.p,'ast'),'AST']]),
       parts: (r.p.min/r.p.gp).toFixed(1)+' MPG \u00B7 '+r.p.gp+' GP \u00B7 Game Score '+r.score.toFixed(1),
       score:r.score.toFixed(1), cap:'Game Score'};
-  }));
+  }, 5, 'roy'));
 }
 function renderSmoy(){
   var all = smoyFor(CUR, basis.smoy);
-  set('smoy-sub', 'Top 5 reserves: production plus a team-success bonus'+(basis.smoy ? ', judged against last season\u2019s record early on. ' : ', judged on this season\u2019s record alone. ')+asofTxt(), true);
+  set('smoy-sub', 'Top 5 reserves: production plus a team-success bonus'+(basis.smoy ? ', judged against last season\u2019s record early on. ' : ', judged on this season\u2019s record alone. ')+asofTxt()+shareTxt('smoy'), true);
   set('smoy-list', ladder(all, function(r){
     return {rec:r.W+'-'+r.L,
       line: stats([[perG(r.p,'pts'),'PTS'],[perG(r.p,'reb'),'REB'],[perG(r.p,'ast'),'AST']]),
       parts: 'Started '+r.p.gst+' of '+r.p.gp+' games \u00B7 '+(r.p.min/r.p.gp).toFixed(1)+' MPG \u00B7 Game Score '+r.g.toFixed(1),
       score:r.score.toFixed(1), cap:'score'};
-  }));
+  }, 5, 'smoy'));
 }
 function renderClutch(){
   var all = clutchFor(CUR, true);
@@ -2280,18 +2482,18 @@ function renderClutch(){
   }));
 }
 function renderMip(){
-  var top = mipFor(CUR, mipRaw).slice(0, 5);
-  set('mip-sub', 'Top 5 candidates from a stat model, not a vote. '+asofTxt().replace(')', ', no team past '+L.maxg+')')+' Compares each player\u2019s production with last season\u2019s, so a handful of games means this list is mostly hot starts.', true);
+  var all = mipFor(CUR, mipRaw), top = all.slice(0, 5), sh = mipRaw ? null : voteShares(all, 'mip');
+  set('mip-sub', 'Top 5 candidates from a stat model, not a vote. '+asofTxt().replace(')', ', no team past '+L.maxg+')')+' Compares each player\u2019s production with last season\u2019s, so a handful of games means this list is mostly hot starts.'+(sh ? shareTxt('mip') : ''), true);
   var best = top.length ? top[0].score : 1, html = '';
   top.forEach(function(r, i){
-    var p = r.p, c = r.c, b = r.b, rk = i + 1, pct = Math.max(8, 100 * r.score / best), rec = recOf(CUR, p.team);
-    var parts = 'Game Score '+c.gs.toFixed(1)+', up from '+b.gs.toFixed(1)+(mipRaw ? '' : ' (typical change at that level: '+sgn(r.exp)+')')+' \u00B7 '+c.mpg.toFixed(1)+' MPG ('+b.mpg.toFixed(1)+' last season) \u00B7 '+c.gp+' GP';
+    var p = r.p, c = r.c, b = r.b, rk = i + 1, pct = sh ? Math.max(8, 100 * sh[i] / sh[0]) : Math.max(8, 100 * r.score / best), rec = recOf(CUR, p.team);
+    var parts = 'Game Score '+c.gs.toFixed(1)+', up from '+b.gs.toFixed(1)+(mipRaw ? '' : ' (typical change at that level: '+sgn(r.exp)+', so '+sgn(r.score)+' vs. expected)')+' \u00B7 '+c.mpg.toFixed(1)+' MPG ('+b.mpg.toFixed(1)+' last season) \u00B7 '+c.gp+' GP';
     function stat(v, last, lab){ var d = v - last; return '<span class="st"><b>'+v.toFixed(1)+'</b><span class="u">'+lab+'</span><span class="dl '+dcls(d)+'" title="Last season: '+last.toFixed(1)+'">'+sgn(d)+'</span></span> '; }
     html += '<li class="mrow'+(p.team===window.NBA_FAV?' mem':'')+'"><span class="bar" style="width:'+pct.toFixed(1)+'%"></span>'+
       '<span class="mrk r'+rk+'">'+rk+'</span>'+
       '<span class="mwho"><div class="mname" data-pid="'+p.pid+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(p.name)+'</div><div class="mteam">'+esc(p.team)+(rec ? ' \u00B7 '+rec : '')+'</div></span>'+
       '<span class="mline">'+stat(c.pts, b.pts, 'PTS')+stat(c.reb, b.reb, 'REB')+stat(c.ast, b.ast, 'AST')+'<span class="mparts">'+esc(parts)+'</span></span>'+
-      '<span class="mscore">'+sgn(r.score)+'<small>'+(mipRaw ? 'change' : 'vs. expected')+'</small></span></li>';
+      '<span class="mscore">'+(sh ? sharePct(sh[i])+'<small>of the vote</small>' : sgn(r.score)+'<small>'+(mipRaw ? 'change' : 'vs. expected')+'</small>')+'</span></li>';
   });
   set('mip-list', html || '<li class="mrow"><span></span><span class="meta">No eligible players yet.</span></li>');
 }
@@ -2364,16 +2566,16 @@ var BASIS_HINT = 'For a quick read on who is playing best right now, use the Ran
 function howMvp(){
   return '<p>This is a model, not a vote, and it only knows what is in the box score and the standings. Each score has two parts.</p>'+
     '<p><b>Production.</b> Game Score per game, a box-score formula (John Hollinger\u2019s) that rolls points, rebounds, assists, steals, blocks, shooting efficiency, fouls and turnovers into one number; MVP-level seasons are usually 25 to 30. In the blended view, this season\u2019s average is mixed with a player\u2019s last three seasons (weighted 5, 3 and 2, newest first). This season counts as much as the games played so far, against ten games of history, so it takes over gradually: about 30% after five games, 75% after thirty and close to 90% by the end of the year. Players with no earlier seasons on file are measured against a role-player baseline.</p>'+
-    '<p><b>Team success.</b> Team winning percentage, nudged toward last season\u2019s record early on (as if the team had already played 15 games at that pace). Every 10 points of winning percentage above or below .500 moves the score by 2.</p>'+
+    '<p><b>Team success.</b> Team winning percentage, nudged toward last season\u2019s record early on (as if the team had already played 15 games at that pace). Every 10 points of winning percentage above or below .500 moves the score by '+(10*MV.BETA).toFixed(1)+'.</p>'+
     '<p><b>Who is eligible.</b> Players who have appeared in at least 70% of their team\u2019s games and average 25 or more minutes. The league\u2019s own 65-game rule can only apply later in the year.</p>'+
     '<p><b>How it has done.</b> The same formula, run on each finished season with full-year numbers:</p><ul>'+mvpLines()+'</ul>'+
-    '<p>The team-success weight was set while looking at those same four seasons, so read that as a sanity check, not proof. Game Score also undervalues defense, so rim protectors and perimeter defenders will tend to rank lower here than they would in a vote. '+BASIS_HINT+'</p>';
+    '<p>The team-success weight was fitted to the MVP voting of 2003-04 to 2025-26 (static/awardfit.json): '+MV.BETA.toFixed(2)+' per point of winning percentage, and leaving each season out of the fit chose values from 0.20 to 0.22, so the earlier hand-set 0.2 was already about right. The vote shares shown come from the same voting: a within-season softmax of the scores whose temperature was chosen so that past ladders reproduce past vote shares. Game Score also undervalues defense, so rim protectors and perimeter defenders will tend to rank lower here than they would in a vote. '+BASIS_HINT+'</p>';
 }
 function howDpoy(){
-  return '<p>This is a model, not a vote. Box scores cannot see most defense, so it leans on what they can: blocks, steals and defensive rebounds per game, minutes played, and how good the team\u2019s defense is (points allowed per 100 possessions against the league average). The weights were fitted to All-Defensive voting of 2003-04 to 2025-26. Team defense counts most, then steals and blocks, with minutes and defensive rebounds a small plus. This ladder starts on This season only, so it uses just this season\u2019s numbers; the Ranking basis switch in this panel\u2019s header can blend in the last three seasons the same way as the MVP ladder.</p>'+
+  return '<p>This is a model, not a vote. Box scores cannot see most defense, so it leans on what they can: blocks, steals and defensive rebounds per game, minutes played, and how good the team\u2019s defense is (points allowed per 100 possessions against the league average). The weights were fitted to All-Defensive voting of 2003-04 to 2025-26. Team defense counts most, then steals and blocks, with minutes and defensive rebounds a small plus. From 2017-18, when lineups can be rebuilt from the play-by-play, the ballot model also counts two impact measures the box score cannot see: defensive adjusted plus-minus and how much opponents\u2019 rim attempts and rim shooting fall when the player is on the floor. This ladder starts on This season only, so it uses just this season\u2019s numbers; the Ranking basis switch in this panel\u2019s header can blend in the last three seasons the same way as the MVP ladder.</p>'+
     '<p><b>Who is eligible.</b> At least 70% of team games and 20 or more minutes a game.</p>'+
     '<p><b>How it has done.</b> The real Defensive Player of the Year among the eligible players, in each finished season, using that season\u2019s numbers alone:</p><ul>'+winnerLines('dpoy', function(k){ return dpoyFor(k, false); })+'</ul>'+
-    '<p>The ballot model\u2019s weights were fitted on the full All-Defensive voting of 2003-04 to 2025-26 (static/defmodel.json): every player\u2019s share of the points possible, so the 868 vote-getters of those seasons shape the weights, not just the 222 selections. By default the model also counts <b>voting history</b>: whether a player made an All-Defensive team in any of the previous three seasons. Half of all selections are repeats, and in a test that held each season out of the fitting, adding it raised the share of real All-Defensive selections found from 51% to 59% and the Defensive Player of the Year ranked first from 10 to 13 of 23 seasons. Fitting on vote shares instead of the yes/no selections changed little in that same test: 138 of 230 selections found instead of 136, the same 13 Defensive Players of the Year ranked first, and a rank correlation with the vote points among the vote-getters of 0.647 instead of 0.645. Blocks, steals, team defense and reputation carry about as much as the vote can tell them. It is a read on voters as much as on defense, so the switch above offers two other rankings. The <b>defense index</b> drops voting history and adds two things the box score cannot see, both from the rebuilt lineups: <b>rim deterrence</b> (how much less often opponents shoot at the rim, and how much worse they shoot there, when the player is on the floor) and <b>defensive adjusted plus-minus</b> (a ridge regression over every stint of the season that credits each player for points allowed while controlling for the other nine players on the floor). <b>Adjusted plus-minus</b> on its own is the third ranking. In a held-out test over 2017-18 to 2025-26 the defense index found 52 of 90 real All-Defensive selections against 46 for the box score alone, while adjusted plus-minus by itself found 34: voters follow blocks, steals and reputation far more than measured impact, which is exactly why the three views are shown side by side. The All-Defensive teams below use the positional rule voters followed through 2022-23 (two guards, two forwards and a center per team) and are positionless from 2023-24.</p>';
+    '<p>The ballot model\u2019s weights were fitted on the full All-Defensive voting of 2003-04 to 2025-26 (static/defmodel.json): every player\u2019s share of the points possible, so the 868 vote-getters of those seasons shape the weights, not just the 222 selections. By default the model also counts <b>voting history</b>: whether a player made an All-Defensive team in any of the previous three seasons. Half of all selections are repeats, and in a test that held each season out of the fitting, adding it raised the share of real All-Defensive selections found from 51% to 59% and the Defensive Player of the Year ranked first from 10 to 13 of 23 seasons. Fitting on vote shares instead of the yes/no selections changed little in that same test: 138 of 230 selections found instead of 136, the same 13 Defensive Players of the Year ranked first, and a rank correlation with the vote points among the vote-getters of 0.647 instead of 0.645. Blocks, steals, team defense and reputation carry about as much as the vote can tell them. Adding the two impact measures where they exist did help: over 2017-18 to 2025-26, held out one season at a time, the nine-feature fit found 57 of 90 selections against 52 for the six-feature fit, and its rank correlation with the vote rose from 0.61 to 0.66. It is a read on voters as much as on defense, so the switch above offers two other rankings. The <b>defense index</b> drops voting history and adds two things the box score cannot see, both from the rebuilt lineups: <b>rim deterrence</b> (how much less often opponents shoot at the rim, and how much worse they shoot there, when the player is on the floor) and <b>defensive adjusted plus-minus</b> (a ridge regression over every stint of the season that credits each player for points allowed while controlling for the other nine players on the floor). <b>Adjusted plus-minus</b> on its own is the third ranking. In a held-out test over 2017-18 to 2025-26 the defense index found 52 of 90 real All-Defensive selections against 46 for the box score alone, while adjusted plus-minus by itself found 34: voters follow blocks, steals and reputation far more than measured impact, which is exactly why the three views are shown side by side. The All-Defensive teams below use the positional rule voters followed through 2022-23 (two guards, two forwards and a center per team) and are positionless from 2023-24.</p>';
 }
 function howRoy(){
   return '<p>This is a model, not a vote. A rookie here is a player with no earlier season in the data ('+seasonLabel(SEAS_KEYS[0])+' onward). Rookies are ranked on Game Score per game, the same box-score measure as the MVP ladder, because that alone has matched the real winners; they need 70% of team games and 15 or more minutes a game. Nobody has history to blend in, so this ladder has no basis switch.</p>'+
@@ -2381,9 +2583,9 @@ function howRoy(){
     '<p>A rookie who starts hot in a handful of games can top this list, and Game Score does not see defense.</p>';
 }
 function howSmoy(){
-  return '<p>This is a model, not a vote. Eligible players came off the bench in more games than they started (the league\u2019s rule), have appeared in 70% of team games and average 15 or more minutes. The score is Game Score per game plus the same team-success bonus the MVP ladder uses (2 points for every 10 points of winning percentage above .500, nudged toward last season\u2019s record early on), because every real winner so far played for a team near the top of the standings. The Ranking basis switch in this panel\u2019s header only changes how that bonus is judged: Blend team records (the default) nudges a team\u2019s record toward last season\u2019s early on, and This season only judges it on this season\u2019s record alone. Players\u2019 own past seasons are never blended into this ladder.</p>'+
+  return '<p>This is a model, not a vote. Eligible players came off the bench in more games than they started (the league\u2019s rule), have appeared in 70% of team games and average 15 or more minutes. The score is Game Score per game plus a team-success bonus like the MVP ladder\u2019s ('+(10*MV.BETA_SMOY).toFixed(1)+' points for every 10 points of winning percentage above .500, nudged toward last season\u2019s record early on), because every real winner so far played for a team near the top of the standings. The Ranking basis switch in this panel\u2019s header only changes how that bonus is judged: Blend team records (the default) nudges a team\u2019s record toward last season\u2019s early on, and This season only judges it on this season\u2019s record alone. Players\u2019 own past seasons are never blended into this ladder.</p>'+
     '<p><b>How it has done.</b> The real Sixth Man of the Year among the eligible players:</p><ul>'+winnerLines('smoy', smoyFor)+'</ul>'+
-    '<p>The team-success weight was set while looking at those same seasons, so read that as a sanity check, not proof. Starts come from the box scores, so a player who moves into the starting lineup drops off this list.</p>';
+    '<p>The team-success weight was fitted to the Sixth Man voting of 2003-04 to 2025-26 (static/awardfit.json): '+MV.BETA_SMOY.toFixed(2)+' per point of winning percentage, smaller than the MVP ladder\u2019s; held out season by season it raised the rank correlation with the vote from 0.59 to 0.64 against the earlier hand-set 0.2 and found one more real winner (15 of 23). Starts come from the box scores, so a player who moves into the starting lineup drops off this list.</p>';
 }
 function howClutch(){
   return '<p>This is a model, not a vote. Clutch time is the last five minutes of the fourth quarter or overtime with the score within five points, rebuilt from play-by-play. A player\u2019s clutch score is points plus 0.7 per assist, minus turnovers, minus 0.7 per missed field goal and 0.4 per missed free throw in those moments (the same kind of weighting as Game Score). It uses totals rather than per-game numbers, because the real award follows volume, and players need 70% of team games.</p>'+
@@ -2416,7 +2618,7 @@ function buildAwards(){
     '<div class="agrid">'+shell('dpoy', 'Defensive Player of the Year', 'cmp', basisCtl('dpoy', basis.dpoy)+'<fieldset class="seg"><legend>Ranking</legend><div class="segbtns"><label><input type="radio" name="defrep" value="ballot" checked><span>Ballot model</span></label><label><input type="radio" name="defrep" value="index"><span>Defense index</span></label><label><input type="radio" name="defrep" value="impact"><span>Adjusted plus-minus</span></label></div></fieldset>') + shell('smoy', 'Sixth Man of the Year', 'cmp', basisCtl('smoy', basis.smoy, 'Blend team records')) + shell('roy', 'Rookie of the Year', 'cmp') + shell('clutch', 'Clutch Player of the Year', 'cmp')+'</div>'+
     shell('mip', 'Most Improved Player watch', 'mip', mipCtl) +
     '<div id="awteams"></div>');
-  set('awlede', 'Top 5 candidates for each end-of-season award, plus projected All-NBA, All-Defensive and All-Rookie teams, all from stat models rather than votes. Each ladder that can blend in past seasons has its own Ranking basis switch. '+asofTxt()+' Finals MVP, Coach of the Year and Executive of the Year are not included: they depend on the playoffs or on coaching and front-office information this page does not track. Grizzlies players are shaded.', true);
+  set('awlede', 'Top 5 candidates for each end-of-season award, plus projected All-NBA, All-Defensive and All-Rookie teams, all from stat models rather than votes. Each ladder that can blend in past seasons has its own Ranking basis switch. '+asofTxt()+' Finals MVP, Coach of the Year and Executive of the Year are not included: they depend on the playoffs or on coaching and front-office information this page does not track. '+favName()+' players are shaded.', true);
   set('mvp-how', howMvp()); set('dpoy-how', howDpoy()); set('roy-how', howRoy()); set('smoy-how', howSmoy()); set('clutch-how', howClutch()); set('mip-how', howMip());
   Array.prototype.forEach.call(document.querySelectorAll('input[name=mipmode]'), function(el){
     el.addEventListener('change', function(){ if (el.checked){ mipRaw = el.value === 'raw'; renderMip(); renderGlance(); } });
@@ -3569,8 +3771,54 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 'use strict';
 var LIB = window.NBA_LIB, L = LIB.L, TD = window.NBA_TEAMDATA, el = LIB.el, esc = LIB.esc, CUR = LIB.CUR, NAMES = LIB.TEAMS;
 /* the model: each team's net rating (points per 100 possessions), blended with a fraction of last season's, turned into a win chance for every game */
-var M = {K:10, PW:0.4, HCA:2.0, SIG:12.5, GAMES:82};
+var GM = L.gamemodel || {};   /* fitted by fit_gamemodel.py on the box scores (static/gamemodel.json) */
+var M = {K:GM.K || 10, PW:GM.PW || 0.4, HCA:GM.HCA === undefined ? 2.0 : GM.HCA, SIG:GM.SIG || 12.5, GAP:GM.GAP || 1, B2B:GM.B2B || 0, GAMES:82}, AV = GM.avail || null;
 function prevKey(k){ var p = String(+k - 1); return L.hist[p] ? p : null; }
+/* ---------- availability: the injury report in this build, priced with the fitted coefficients ---------- */
+var INJ = L.injuries || {}, PI = null, BUILT_DAY = LIB.dayNum((L.builtAt || L.asof).slice(0, 10));
+function playerInfo(){
+  if (PI) return PI; PI = {}; var F = 'pid name team gp min pts fgm fga tpm tpa ftm fta oreb dreb reb ast stl blk tov pf gst'.split(' '), pk = prevKey(CUR);
+  var rc = (L.rapm || {})[CUR] || {}, rp = pk ? ((L.rapm || {})[pk] || {}) : {}, hp = {};
+  if (pk) (L.hist[pk].players || []).forEach(function(a){ hp[a[0]] = {gp:a[3], mpg:a[3] ? a[4] / a[3] : 0}; });
+  (L.players || []).forEach(function(a){
+    var pid = a[0], gp = a[3], mpgCur = gp ? a[4] / gp : 0, prev = hp[pid], c = rc[String(pid)], p = rp[String(pid)];
+    var vPrev = p ? p[0] - p[1] : 0, vCur = c ? c[0] - c[1] : null, q = c ? c[2] : 0, Q0 = 2500;   /* this season's RAPM takes over after about 2,500 possessions */
+    var v = vCur === null ? vPrev : (q * vCur + Q0 * vPrev) / (q + Q0);
+    PI[pid] = {name:a[1], team:a[2], gp:gp, mpg:gp >= 3 ? mpgCur : (prev ? prev.mpg : mpgCur), v:v};
+  });
+  /* players who have not appeared this season (hurt since the preseason) are still part of last season's rating: price them on last season's minutes and value */
+  if (pk) (L.hist[pk].players || []).forEach(function(a){ var pid = a[0]; if (PI[pid] || !a[3]) return; var p = rp[String(pid)]; PI[pid] = {name:a[1], team:a[2], gp:0, mpg:a[4] / a[3], v:p ? p[0] - p[1] : 0}; });
+  return PI;
+}
+var SW = (AV && AV.status) || {out:1, doubtful:0.8, questionable:0.5, probable:0.15};   /* hand-set until check_injuries.py has measured them */
+function statusW(s){ s = String(s || '').toLowerCase(); if (/out/.test(s)) return SW.out; if (/doubtful/.test(s)) return SW.doubtful; if (/questionable|day.to.day|gtd/.test(s)) return SW.questionable; if (/probable/.test(s)) return SW.probable; return SW.questionable; }
+function fadeW(status, date, ret){
+  var d = LIB.dayNum(date) - BUILT_DAY;
+  if (ret && /^\d{4}-\d{2}-\d{2}$/.test(ret)) return LIB.dayNum(date) < LIB.dayNum(ret) ? 1 : 0;   /* a listed return date settles it */
+  var full = /out/.test(String(status).toLowerCase()) ? 3 : 1, zero = /out/.test(String(status).toLowerCase()) ? 21 : 5;
+  return d <= full ? 1 : d >= zero ? 0 : (zero - d) / (zero - full);
+}
+/* the team's expected margin change at this date from the players on its injury report: each missing player costs minutes share x (value x RAPM + mins),
+   weighted by status, by how far off the date is, and by how much of the team's rating was earned with him on the floor (a player out all season is already in the rating) */
+function availAdj(team, date){
+  var list = INJ[team]; if (!AV || !list || !list.length) return {adj:0, items:[]};
+  var info = playerInfo(), n = (L.tg || {})[team] || L.maxg || 0, wc = n / (n + M.K), items = [], adj = 0;
+  list.forEach(function(r){
+    var pid = r[0], p = info[pid]; if (!p || p.mpg < 8) return;
+    var w = statusW(r[2]) * fadeW(r[2], date, r[4]) * (wc * (n ? p.gp / n : 1) + (1 - wc)); if (w <= 0) return;
+    var cost = w * (p.mpg / 48) * (AV.value * p.v + AV.mins);   /* negative: points of margin lost */
+    adj += cost; items.push({pid:pid, name:p.name || r[1], status:r[2], cost:cost, w:w, ret:r[4] || ''});
+  });
+  items.sort(function(a, b){ return a.cost - b.cost; }); return {adj:adj, items:items};
+}
+function pHome(rh, ra, restH, restA, adjH, adjA){ return LIB.phi(marginOf(rh, ra, restH, restA, adjH, adjA) / M.SIG); }
+function marginOf(rh, ra, restH, restA, adjH, adjA){ return M.GAP * (rh - ra) + M.HCA + M.B2B * ((restA === 0 ? 1 : 0) - (restH === 0 ? 1 : 0)) + (adjH || 0) - (adjA || 0); }
+/* the full win chance for a dated game, with every piece of the margin */
+function gameChance(home, away, date){
+  var rt = ratings(CUR), rH = restDays(home, date), rA = restDays(away, date), aH = availAdj(home, date), aA = availAdj(away, date);
+  var m = marginOf(rt.r[home], rt.r[away], rH, rA, aH.adj, aA.adj);
+  return {p:LIB.phi(m / M.SIG), margin:m, gap:M.GAP * (rt.r[home] - rt.r[away]), hca:M.HCA, rest:M.B2B * ((rA === 0 ? 1 : 0) - (rH === 0 ? 1 : 0)), restH:rH, restA:rA, availH:aH, availA:aA};
+}
 function allGames(k){            /* one row per game, in date order: [date index, home team, away team, home points, away points, home possessions, away possessions] */
   var sg = TD.seasonGames(k), rows = [];
   sg.teams.forEach(function(t){ sg.games[t].forEach(function(r){ if (r.home) rows.push({di:r.di, h:t, a:r.opp, hp:r.o[0], ap:r.p[0], hq:TD.poss(r.o), aq:TD.poss(r.p)}); }); });
@@ -3591,7 +3839,6 @@ function ratings(k, D){
   g.teams.forEach(function(t){ var n = c.n[t], p = pv ? M.PW * pv[t] : 0; r[t] = (n/(n + M.K)) * c.net[t] + (M.K/(n + M.K)) * p; });
   return {r:r, n:c.n, net:c.net};
 }
-function pHome(rh, ra){ return LIB.phi(((rh - ra) + M.HCA) / M.SIG); }
 function record(k, D){
   var g = allGames(k), w = {}, l = {}; g.teams.forEach(function(t){ w[t] = 0; l[t] = 0; });
   g.rows.forEach(function(r){ if (D !== undefined && r.di > D) return; var hw = r.hp > r.ap; w[hw ? r.h : r.a]++; l[hw ? r.a : r.h]++; });
@@ -3627,7 +3874,7 @@ function simulate(N, seed){
   var rt = ratings(CUR), rec = record(CUR), teams = Object.keys(rt.r).sort(), idx = {}; teams.forEach(function(t, i){ idx[t] = i; });
   var nT = teams.length, ST = window.NBA_STANDINGS[CUR] || {}, conf = teams.map(function(t){ var s = ST[t]; return s ? s.conf : 'East'; }), div = teams.map(function(t){ var s = ST[t]; return s ? s.div : ''; });
   var rem = []; var left = new Array(nT).fill(0);
-  REM.forEach(function(g){ if (idx[g.home] === undefined || idx[g.away] === undefined) return; var h = idx[g.home], a = idx[g.away]; rem.push([h, a, pHome(rt.r[g.home], rt.r[g.away])]); left[h]++; left[a]++; });
+  REM.forEach(function(g){ if (idx[g.home] === undefined || idx[g.away] === undefined) return; var h = idx[g.home], a = idx[g.away]; rem.push([h, a, pHome(rt.r[g.home], rt.r[g.away], restDays(g.home, g.date), restDays(g.away, g.date), availAdj(g.home, g.date).adj, availAdj(g.away, g.date).adj)]); left[h]++; left[a]++; });
   /* head-to-head and conference records so far, for the league's tiebreakers */
   var h2h0 = new Int16Array(nT * nT), cw0 = new Int16Array(nT), cg0 = new Int16Array(nT), sg = TD.seasonGames(CUR);
   teams.forEach(function(t, i){ (sg.games[t] || []).forEach(function(r){ var j = idx[r.opp]; if (j === undefined) return; var win = r.o[0] > r.p[0]; if (win) h2h0[i*nT + j]++; if (conf[i] === conf[j]){ cg0[i]++; if (win) cw0[i]++; } }); });
@@ -3734,6 +3981,17 @@ function schedRows(){
   var sorted = out.slice().sort(function(a, b){ return b.avg - a.avg; }); sorted.forEach(function(r, i){ r.rank = i + 1; });
   return out;
 }
+function injuryHtml(){
+  var teams = Object.keys(INJ).sort(), tomorrow = (function(){ var d = new Date((L.builtAt || L.asof).slice(0, 10)+'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+  if (!teams.length) return '<p class="smn">'+(L.injuryNote ? esc(L.injuryNote) : 'No injury report was fetched in this build, so the win chances assume full rosters.')+'</p>';
+  var n = 0, rows = teams.map(function(tm){
+    var a = availAdj(tm, tomorrow); if (!a.items.length) return '';
+    n += a.items.length;
+    return '<tr'+(tm === window.NBA_FAV ? ' class="mem"' : '')+'><td class="l"><span class="tmn" role="link" tabindex="0" data-team="'+tm+'">'+esc(NAMES[tm] || tm)+'</span></td><td class="l">'+a.items.map(function(it){ return '<span data-pid="'+it.pid+'" role="link" tabindex="0">'+esc(it.name)+'</span> <span class="smn">('+esc(it.status)+(it.ret ? ', back '+LIB.fmtDay(it.ret) : '')+', '+(it.cost).toFixed(1)+')</span>'; }).join('<br>')+'</td><td><b>'+a.adj.toFixed(1)+'</b></td></tr>';
+  }).join('');
+  return '<p class="smn">'+n+' players listed'+(L.injuryNote ? ' ('+esc(L.injuryNote)+')' : '')+'. Each name shows its status and the points of margin it costs the team for a game tomorrow; the last column is the team\u2019s total. Listings fade over the following days unless a return date is given, and a player who has missed most of the season counts for little, because his absence is already in the team\u2019s rating.</p>'+
+    '<div class="scroll"><table class="stbl"><thead><tr><th class="l">Team</th><th class="l">Players (status, cost)</th><th>Margin tomorrow</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
 function renderSched(){
   var rows = schedRows().sort(function(a, b){
     var k = S.sort, va = k === 'team' ? NAMES[a.team] : a[k], vb = k === 'team' ? NAMES[b.team] : b[k];
@@ -3761,9 +4019,12 @@ function init(){
       '<button type="button" class="randbtn" id="ol-rerun" title="Run the simulations again with a different random seed">\uD83C\uDFB2 Run again</button></div>'+
       '<div class="stgrid" id="ol-proj"></div><p class="smn" id="ol-miss"></p></section>'+
     '<section class="card schedsec" id="schedule" aria-labelledby="ol-sh"><h2 id="ol-sh">The schedule ahead</h2><p class="smn">What is left for each team: how many games, how many on the road, back-to-backs (the second game in two days), and how strong the opponents are (the average rating of the opponents still to face, in points per 100 possessions, so +2 means a tougher road than average).</p><div class="scroll"><table class="stbl" id="ol-sched"><thead></thead><tbody></tbody></table></div></section>'+
+    '<section class="card injsec" id="injuries" aria-labelledby="ol-ih"><h2 id="ol-ih">Injury report in this build</h2><div id="ol-inj"></div></section>'+
     '<section class="card tsdefs" id="how"><details><summary>How the projections work and how well they have done</summary><div id="ol-how"></div></details></section>';
-  el('ol-how').innerHTML = '<p><b>The model.</b> Each team\u2019s strength is its net rating so far (points scored minus allowed per 100 possessions, with possessions estimated from the box score), blended with 40% of last season\u2019s final net rating. This season counts as much as the games played so far against 10 games of last season\u2019s rating, so it takes over steadily. The expected margin of a game is the difference in strength plus 2.0 points for the home team, and the chance of winning follows from a game-to-game spread of 12.5 points. Each simulation plays out every remaining game that way and then ranks the conferences.</p><p><b>How it did.</b></p><div id="ol-bt"></div>'+
-    '<p><b>What it leaves out.</b> Injuries, trades and back-to-back fatigue are not in the model. Ties in the standings follow the league\u2019s tiebreakers (head-to-head, division winner, conference record, then point differential, with the team rating standing in for the margin since margins are not simulated); the games the schedule file is missing count toward wins but not toward head-to-head or conference records. Early in a season the ratings rest on only a handful of games, so the odds are wide.</p>';
+  el('ol-how').innerHTML = '<p><b>The model.</b> Each team\u2019s strength is its net rating so far (points scored minus allowed per 100 possessions, with possessions estimated from the box score), blended with '+Math.round(100*M.PW)+'% of last season\u2019s final net rating. This season counts as much as the games played so far against '+M.K+' games of last season\u2019s rating, so it takes over steadily. The expected margin of a game is '+M.GAP.toFixed(2)+' times the difference in strength, plus '+M.HCA.toFixed(1)+' points for the home team, minus '+M.B2B.toFixed(1)+' points for a team on the second night of a back-to-back (plus '+M.B2B.toFixed(1)+' when it is the opponent who is), minus the cost of the players on each team\u2019s injury report (below). The chance of winning follows from a game-to-game spread of '+M.SIG.toFixed(1)+' points. Each simulation plays out every remaining game that way and then ranks the conferences.</p>'+
+    '<p><b>Where the numbers come from.</b> Every constant was fitted on the box scores of 2003-04 to 2025-26 (fit_gamemodel.py, static/gamemodel.json), each season held out of the fit in turn: the blend from the held-out log loss of the home win chance, the margin terms by least squares on 2017-18 onward because home court has fallen from about 3.5 points in 2003-04 to under 2 now. The rest term improved the held-out log loss from 0.6235 to 0.6223. The injury adjustment was fitted on which regulars actually sat out each game since 2018-19: a missing regular costs about '+(AV ? (-AV.mins).toFixed(1) : '2')+' points of margin per full game of minutes almost regardless of who he is, plus '+(AV ? (-AV.value).toFixed(2) : '0.3')+' per point of his RAPM; knowing who sat out improved the held-out log loss from 0.6225 to 0.6126, a far larger gain than rest. Live, the model only knows the injury report at build time, so it discounts a listing by status ('+(AV && AV.status ? 'weights measured from the logged reports: Out '+SW.out.toFixed(2)+', Questionable '+SW.questionable.toFixed(2) : 'Out counts fully, Questionable half, until the logged reports have been checked against who dressed')+'), lets it fade over the following days unless a return date is given, and scales it by how much of the team\u2019s rating was earned with that player on the floor.</p><p><b>How it did.</b></p><div id="ol-bt"></div>'+
+    '<p><b>What it leaves out.</b> Trades, players returning early, and anything the morning injury report does not know; the actual active list only appears about 30 minutes before tip-off, after this page is built. Ties in the standings follow the league\u2019s tiebreakers (head-to-head, division winner, conference record, then point differential, with the team rating standing in for the margin since margins are not simulated); the games the schedule file is missing count toward wins but not toward head-to-head or conference records. Early in a season the ratings rest on only a handful of games, so the odds are wide.</p>';
+  el('ol-inj').innerHTML = injuryHtml();
   el('ol-lede').textContent = 'Where each team is headed: projected win totals and playoff odds from simulating the rest of the season, plus how hard each team\u2019s remaining schedule is. Data through '+LIB.fmtDay(L.asof, true)+' ('+L.games+' games).';
   var sb = el('sb-o'), txt = L.maxg < 20 ? 'Early season: no team has played more than '+L.maxg+' games, so every rating here rests on a handful of games and the odds are very wide. This notice goes away after 20 team games.' : ''; sb.textContent = txt; sb.hidden = !txt;
   run(); renderBacktest();
@@ -3777,7 +4038,7 @@ function init(){
   LIB.toolbar(el('schedule'), [{label:'Download schedule table (CSV)', run:function(){ return LIB.saveTableCsv(el('ol-sched'), 'schedule-ahead.csv'); }}]);
 }
 window.NBA_MODEL = {M:M, ratings:ratings, pHome:pHome, expectedWins:expectedWins, backtest:backtest, simulate:simulate, restDays:restDays, restTag:restTag, remaining:REM,
-  winProb:function(home, away){ var rt = ratings(CUR); return pHome(rt.r[home], rt.r[away]); },
+  winProb:function(home, away, date){ if (date) return gameChance(home, away, date).p; var rt = ratings(CUR); return pHome(rt.r[home], rt.r[away]); }, gameChance:gameChance, availAdj:availAdj, injuries:INJ, marginOf:marginOf,
   upcoming:function(team, n){ return REM.filter(function(g){ return g.home === team || g.away === team; }).slice(0, n || 8).map(function(g){ var home = g.home === team; return {date:g.date, opp:home ? g.away : g.home, home:home, rest:restDays(team, g.date), oppRest:restDays(home ? g.away : g.home, g.date)}; }); }};
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
@@ -3907,19 +4168,25 @@ function render(){
   body += '<section class="card hubkpis">'+kp('Record', sm.w+'-'+sm.l, ord(sm.seed)+' in the '+sm.conf+'ern Conference')+kp('Net rating', LIB.sgn(sm.net), ord(sm.netRank)+' of 30 \u00B7 off '+f1(sm.ortg)+' / def '+f1(sm.drtg))+kp('Last 10', sm.last10[0]+'-'+sm.last10[1], (sm.streak > 0 ? 'Won ' : 'Lost ')+Math.abs(sm.streak)+' in a row')+kp('Home / road', sm.hw+'-'+sm.hl+' / '+sm.aw+'-'+sm.al, 'wins and losses')+'</section>';
   var nx = up[0];
   if (nx){
-    var p = nx.home ? MOD.winProb(t, nx.opp) : 1 - MOD.winProb(nx.opp, t), when = LIB.fmtDay(nx.date, true), row = (L.sched || []).filter(function(r){ return r[4] === 0 && r[0] === nx.date && (r[2] === t || r[3] === t); })[0];
+    var gc = nx.home ? MOD.gameChance(t, nx.opp, nx.date) : MOD.gameChance(nx.opp, t, nx.date), p = nx.home ? gc.p : 1 - gc.p, when = LIB.fmtDay(nx.date, true), row = (L.sched || []).filter(function(r){ return r[4] === 0 && r[0] === nx.date && (r[2] === t || r[3] === t); })[0];
+    var sgn = function(v){ return (v >= 0 ? '+' : '\u2212')+Math.abs(v).toFixed(1); }, side = nx.home ? 1 : -1, pieces = [];
+    pieces.push('rating gap '+sgn(side * gc.gap)); pieces.push('home court '+sgn(side * gc.hca)); if (gc.rest) pieces.push('rest '+sgn(side * gc.rest));
+    var mine = nx.home ? gc.availH : gc.availA, theirs = nx.home ? gc.availA : gc.availH;
+    mine.items.slice(0, 3).forEach(function(it){ pieces.push(esc(it.name)+' '+esc(String(it.status).toLowerCase())+' '+sgn(it.cost)); }); if (mine.items.length > 3) pieces.push((mine.items.length - 3)+' more out '+sgn(mine.items.slice(3).reduce(function(s, it){ return s + it.cost; }, 0)));
+    theirs.items.slice(0, 3).forEach(function(it){ pieces.push(esc(it.name)+' ('+esc(NAMES[nx.opp])+') '+esc(String(it.status).toLowerCase())+' '+sgn(-it.cost)); }); if (theirs.items.length > 3) pieces.push((theirs.items.length - 3)+' more '+esc(NAMES[nx.opp])+' players out '+sgn(-theirs.items.slice(3).reduce(function(s, it){ return s + it.cost; }, 0)));
     body += '<section class="card hubnext"><h2>Next game</h2><p class="nextl"><b>'+(nx.home ? '' : 'at ')+esc(NAMES[nx.opp])+'</b> \u00B7 '+when+(row ? ' \u00B7 '+esc(row[1]) : '')+'</p>'+
       '<p class="smn">'+esc(NAMES[t])+(nx.rest === null ? '' : ' on '+(nx.rest === 0 ? 'the second night of a back-to-back' : nx.rest+' day'+(nx.rest === 1 ? '' : 's')+' of rest'))+(nx.oppRest === null ? '' : '; '+esc(NAMES[nx.opp])+' on '+(nx.oppRest === 0 ? 'the second night of a back-to-back' : nx.oppRest+' day'+(nx.oppRest === 1 ? '' : 's')+' of rest'))+'.</p>'+
-      '<div class="wp"><span>'+esc(NAMES[t])+' win chance</span><span class="pbar wide"><i class="g" style="width:'+(100*p).toFixed(0)+'%"></i></span><b>'+Math.round(100*p)+'%</b></div></section>';
+      '<div class="wp"><span>'+esc(NAMES[t])+' win chance</span><span class="pbar wide"><i class="g" style="width:'+(100*p).toFixed(0)+'%"></i></span><b>'+Math.round(100*p)+'%</b></div>'+
+      '<p class="smn">Expected margin '+sgn(side * gc.margin)+': '+pieces.join(' \u00B7 ')+'. From the ratings, rest and the injury report in this build; see the Projections tab for how it is fitted.</p></section>';
   }
   body += '<section class="card hubmu" id="hub-mu"><h2>Matchup preview</h2><p class="smn">Where each team gets its shots against how the other defends each part of the floor. Zone results are pulled toward the league average, so a few attempts do not swing them. Pick any opponent above.</p><div class="mugrid">'+matchupHtml(CUR, t, o)+matchupHtml(CUR, o, t)+'</div></section>';
   body += '<section class="card hubres"><h2>Recent results</h2><div class="scroll"><table class="stbl" id="hub-res"><thead><tr><th class="l">Date</th><th class="l">Opponent</th><th>Result</th><th>Score</th><th>Rest</th></tr></thead><tbody>'+
-    res.map(function(r){ var home = r[3] === t, opp = home ? r[2] : r[3], ts = home ? r[6] : r[5], os = home ? r[5] : r[6], win = ts > os; return '<tr class="rowlink" data-gid="'+r[13]+'" tabindex="0" role="button" title="Open the box score"><td class="l">'+LIB.fmtDay(r[0])+'</td><td class="l">'+(home ? 'vs ' : 'at ')+esc(NAMES[opp])+'</td><td><b style="color:var(--'+(win ? 'freq' : 'hot')+')">'+(win ? 'W' : 'L')+'</b></td><td>'+ts+'-'+os+(r[7] ? ' (OT)' : '')+'</td><td>'+esc(MOD.restTag(t, r[0]) || '')+'</td></tr>'; }).join('')+'</tbody></table></div></section>';
+    res.map(function(r){ var home = r[3] === t, opp = home ? r[2] : r[3], ts = home ? r[6] : r[5], os = home ? r[5] : r[6], win = ts > os; return '<tr class="rowlink" data-gid="'+r[13]+'" tabindex="0" role="button" title="Open the box score"><td class="l">'+LIB.fmtDay(r[0])+'</td><td class="l">'+(home ? 'vs ' : 'at ')+esc(NAMES[opp])+'</td><td><b style="color:var(--'+(win ? 'freq' : 'hot')+')">'+(win ? 'W' : 'L')+'</b></td><td>'+ts+'-'+os+(r[7] ? ' (OT)' : '')+'</td><td>'+esc(MOD.restTag(t, r[0]) || '\u2013')+'</td></tr>'; }).join('')+'</tbody></table></div></section>';
   body += '<section class="card hubrot"><h2>Rotation</h2><div class="scroll"><table class="stbl" id="hub-rot"><thead><tr><th class="l">Player</th><th>GP</th><th>MPG</th><th>PTS</th><th>REB</th><th>AST</th><th>TS%</th><th>Usage</th><th>On/off net</th></tr></thead><tbody></tbody></table></div><p class="smn">On/off needs 40+ minutes on and off the floor; early in the season it is very noisy.</p></section>';
   body += '<section class="card hublu" id="hub-lu"><h2>Lineups and duos</h2><div id="hub-lu-body"></div></section>';
   body += '<section class="card hubtr"><h2>The season so far</h2><div id="hub-trend"></div></section>';
   body += '<section class="card hubup"><h2>Coming up</h2><div class="scroll"><table class="stbl" id="hub-up"><thead><tr><th class="l">Date</th><th class="l">Opponent</th><th>Rest</th><th>Opponent rest</th><th>Win chance</th></tr></thead><tbody>'+
-    up.map(function(g){ var p2 = g.home ? MOD.winProb(t, g.opp) : 1 - MOD.winProb(g.opp, t); return '<tr><td class="l">'+LIB.fmtDay(g.date)+'</td><td class="l">'+(g.home ? 'vs ' : 'at ')+esc(NAMES[g.opp])+'</td><td>'+(g.rest === null ? '\u2013' : g.rest === 0 ? 'back-to-back' : g.rest+' day'+(g.rest === 1 ? '' : 's'))+'</td><td>'+(g.oppRest === null ? '\u2013' : g.oppRest === 0 ? 'back-to-back' : g.oppRest+' day'+(g.oppRest === 1 ? '' : 's'))+'</td><td>'+Math.round(100*p2)+'%</td></tr>'; }).join('')+'</tbody></table></div></section>';
+    up.map(function(g){ var p2 = g.home ? MOD.winProb(t, g.opp, g.date) : 1 - MOD.winProb(g.opp, t, g.date); return '<tr><td class="l">'+LIB.fmtDay(g.date)+'</td><td class="l">'+(g.home ? 'vs ' : 'at ')+esc(NAMES[g.opp])+'</td><td>'+(g.rest === null ? '\u2013' : g.rest === 0 ? 'back-to-back' : g.rest+' day'+(g.rest === 1 ? '' : 's'))+'</td><td>'+(g.oppRest === null ? '\u2013' : g.oppRest === 0 ? 'back-to-back' : g.oppRest+' day'+(g.oppRest === 1 ? '' : 's'))+'</td><td>'+Math.round(100*p2)+'%</td></tr>'; }).join('')+'</tbody></table></div></section>';
   el('hub-body').innerHTML = body;
   el('hub-lu-body').setAttribute('data-lumode', S.lumode || 'lineups'); LINEUPS.mount(el('hub-lu-body'), t, CUR); el('hub-trend').innerHTML = trendSvg(t);
   var pstats = window.NBA_PLAYERSTATS ? window.NBA_PLAYERSTATS.compute(CUR) : {}, rows = Object.keys(pstats).map(function(k){ return pstats[k]; }).filter(function(d){ return d.team === t && d.gp > 0; }).sort(function(a, b){ return (b.mpg || 0) * b.gp - (a.mpg || 0) * a.gp; });
@@ -4028,13 +4295,16 @@ window.NBA_GAMES = {open:open, has:function(gid){ return !!BOX[gid]; }, shots:fu
 var LIB = window.NBA_LIB, L = LIB.L, el = LIB.el, esc = LIB.esc, TC = L.tcolors || {};
 var SNAP = L.snapshots;
 var AWARDS = [['mvp','MVP'],['dpoy','Defensive Player'],['smoy','Sixth Man'],['roy','Rookie of the Year'],['mip','Most Improved'],['clutch','Clutch Player']];
-var TOP = 5, S = {award:'mvp', showOut:false};
+var TOP = 5, S = {award:'mvp', showOut:false, share:false};
+function hasShare(a){ var d = SNAP.awards[a]; return d.some(function(list){ return list.some(function(r){ return r.length > 2; }); }); }
 function teamOf(pid){ var p = L.players.filter(function(x){ return x[0] === pid; })[0]; return p ? p[2] : ''; }
 function colorOf(team){ var c = TC[team]; return c && /^[0-9a-f]{6}$/i.test(c[0]) ? '#'+c[0] : 'var(--muted)'; }
 function series(a){
   /* for each player who ever made the top 5: rank by date (0 = out), plus first/last/current */
   var days = SNAP.awards[a], dates = SNAP.dates, by = {}, n = dates.length;
-  days.forEach(function(list, i){ list.slice(0, TOP).forEach(function(r, j){ var s = by[r[0]] || (by[r[0]] = {pid:r[0], rank:new Array(n).fill(0), score:new Array(n).fill(null)}); s.rank[i] = j + 1; s.score[i] = r[1]; }); });
+  days.forEach(function(list, i){ list.slice(0, TOP).forEach(function(r, j){ var s = by[r[0]] || (by[r[0]] = {pid:r[0], rank:new Array(n).fill(0), score:new Array(n).fill(null), share:new Array(n).fill(null)}); s.rank[i] = j + 1; s.score[i] = r[1]; }); });
+  /* predicted vote shares are kept for everyone in the day's list (the top 8), so a line can continue below the top 5 */
+  days.forEach(function(list, i){ list.forEach(function(r){ if (by[r[0]] && r.length > 2) by[r[0]].share[i] = r[2]; }); });
   var out = Object.keys(by).map(function(k){
     var s = by[k], inn = s.rank.map(function(r, i){ return r ? i : -1; }).filter(function(i){ return i >= 0; });
     s.first = inn[0]; s.last = inn[inn.length - 1]; s.days = inn.length; s.now = s.rank[n - 1]; s.best = Math.min.apply(null, s.rank.filter(function(r){ return r; }));
@@ -4044,18 +4314,27 @@ function series(a){
 }
 function chart(a){
   var dates = SNAP.dates, n = dates.length, ser = series(a), W = Math.max(320, (el('tr-wrap') ? el('tr-wrap').clientWidth : 760) || 760), narrow = W < 560;
-  var ml = 34, mr = narrow ? 90 : 150, mt = 16, mb = 34, H = 260, X = function(i){ return ml + (W - ml - mr) * (n === 1 ? 0.5 : i / (n - 1)); }, Y = function(r){ return mt + (H - mt - mb) * (r - 1) / (TOP - 1); };
-  var s = '<svg id="tr-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Top-5 ranks over the season" aria-describedby="tr-sr">';
-  for (var r = 1; r <= TOP; r++) s += '<line x1="'+ml+'" x2="'+(W-mr)+'" y1="'+Y(r).toFixed(1)+'" y2="'+Y(r).toFixed(1)+'" style="stroke:var(--rule)"/><text x="'+(ml-8)+'" y="'+(Y(r)+4).toFixed(1)+'" text-anchor="end" font-size="12" font-weight="600" style="fill:var(--muted)">#'+r+'</text>';
+  var shareMode = S.share && hasShare(a);
+  var ml = shareMode ? 44 : 34, mr = narrow ? 90 : 150, mt = 16, mb = 34, H = 260, X = function(i){ return ml + (W - ml - mr) * (n === 1 ? 0.5 : i / (n - 1)); };
+  var maxSh = 0.1; if (shareMode) ser.forEach(function(p){ p.share.forEach(function(v){ if (v !== null && v > maxSh) maxSh = v; }); });
+  var top = Math.min(1, Math.ceil(maxSh * 10 + 0.5) / 10);   /* axis top: the next 10% above the largest share */
+  var Y = shareMode ? function(v){ return mt + (H - mt - mb) * (1 - v / top); } : function(r){ return mt + (H - mt - mb) * (r - 1) / (TOP - 1); };
+  var s = '<svg id="tr-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+(shareMode ? 'Predicted share of the vote over the season' : 'Top-5 ranks over the season')+'" aria-describedby="tr-sr">';
+  if (shareMode){
+    var tick = top > 0.5 ? 0.2 : top > 0.25 ? 0.1 : 0.05;
+    for (var v = 0; v <= top + 1e-9; v += tick) s += '<line x1="'+ml+'" x2="'+(W-mr)+'" y1="'+Y(v).toFixed(1)+'" y2="'+Y(v).toFixed(1)+'" style="stroke:var(--rule)"/><text x="'+(ml-8)+'" y="'+(Y(v)+4).toFixed(1)+'" text-anchor="end" font-size="12" font-weight="600" style="fill:var(--muted)">'+Math.round(100*v)+'%</text>';
+  } else {
+    for (var r = 1; r <= TOP; r++) s += '<line x1="'+ml+'" x2="'+(W-mr)+'" y1="'+Y(r).toFixed(1)+'" y2="'+Y(r).toFixed(1)+'" style="stroke:var(--rule)"/><text x="'+(ml-8)+'" y="'+(Y(r)+4).toFixed(1)+'" text-anchor="end" font-size="12" font-weight="600" style="fill:var(--muted)">#'+r+'</text>';
+  }
   var step = Math.max(1, Math.ceil(n / (narrow ? 4 : 8)));
   dates.forEach(function(d, i){ if (i % step === 0 || i === n - 1) s += '<text x="'+X(i).toFixed(1)+'" y="'+(H-12)+'" text-anchor="middle" font-size="11" style="fill:var(--muted)">'+LIB.fmtDay(d)+'</text>'; });
   ser.forEach(function(p){
     if (!p.now && !S.showOut) return;
-    var col = colorOf(p.team), d = '', open = false;
-    p.rank.forEach(function(r, i){ if (r){ d += (open ? 'L' : 'M')+X(i).toFixed(1)+','+Y(r).toFixed(1)+' '; open = true; } else open = false; });
+    var col = colorOf(p.team), d = '', open = false, vals = shareMode ? p.share : p.rank;
+    vals.forEach(function(r, i){ var inn = shareMode ? r !== null : !!r; if (inn){ d += (open ? 'L' : 'M')+X(i).toFixed(1)+','+Y(r).toFixed(1)+' '; open = true; } else open = false; });
     s += '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="'+(p.now ? 3 : 1.6)+'" stroke-opacity="'+(p.now ? 0.95 : 0.45)+'" stroke-linejoin="round" stroke-linecap="round" class="trline" data-pid="'+p.pid+'"/>';
-    p.rank.forEach(function(r, i){ if (r) s += '<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(r).toFixed(1)+'" r="'+(p.now ? 4 : 3)+'" fill="'+col+'" class="trdot" data-pid="'+p.pid+'" data-i="'+i+'"><title>'+esc(p.name)+' \u00B7 '+LIB.fmtDay(dates[i])+' \u00B7 #'+r+' (score '+p.score[i]+')</title></circle>'; });
-    if (p.now) s += '<text x="'+(W-mr+8)+'" y="'+(Y(p.now)+4).toFixed(1)+'" font-size="12" font-weight="700" class="plbl" style="fill:var(--ink)">'+esc(narrow ? LIB.lastName(p.pid) : p.name)+'</text>';
+    vals.forEach(function(r, i){ var inn = shareMode ? r !== null : !!r; if (inn) s += '<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(r).toFixed(1)+'" r="'+(p.now ? 4 : 3)+'" fill="'+col+'" class="trdot" data-pid="'+p.pid+'" data-i="'+i+'"><title>'+esc(p.name)+' \u00B7 '+LIB.fmtDay(dates[i])+' \u00B7 '+(p.rank[i] ? '#'+p.rank[i] : 'outside the top 5')+(shareMode ? ' \u00B7 '+Math.round(100*r)+'% of the vote' : ' (score '+p.score[i]+')')+'</title></circle>'; });
+    if (p.now){ var ly = shareMode ? (p.share[n-1] === null ? Y(0) : Y(p.share[n-1])) : Y(p.now); s += '<text x="'+(W-mr+8)+'" y="'+(ly+4).toFixed(1)+'" font-size="12" font-weight="700" class="plbl" style="fill:var(--ink)">'+esc(narrow ? LIB.lastName(p.pid) : p.name)+(shareMode && p.share[n-1] !== null ? ' '+Math.round(100*p.share[n-1])+'%' : '')+'</text>'; }
   });
   return s+'</svg>';
 }
@@ -4065,12 +4344,12 @@ function table(a){
   var rows = ser.filter(function(p){ return p.now || S.showOut; }).map(function(p){
     return '<tr'+(p.now ? '' : ' class="zero"')+'><td class="l"><span data-pid="'+p.pid+'" role="link" tabindex="0">'+esc(p.name)+'</span> <span class="smn">'+esc(p.team)+'</span></td><td>'+(p.now ? '#'+p.now : 'out')+'</td><td>#'+p.best+'</td><td>'+p.days+' of '+n+'</td><td class="l">'+LIB.fmtDay(dates[p.first])+'</td><td class="l">'+(p.now ? 'still in' : 'out since '+LIB.fmtDay(dates[Math.min(n-1, p.last+1)]))+'</td></tr>';
   }).join('');
-  return '<p class="checks"><label><input type="checkbox" id="tr-showout"'+(S.showOut ? ' checked' : '')+'> Show the '+out+' player'+(out === 1 ? '' : 's')+' who dropped out of the top 5</label></p><div class="scroll"><table class="stbl" id="tr-table"><thead><tr><th class="l">Player</th><th>Now</th><th>Best</th><th>Days in top 5</th><th class="l">First entered</th><th class="l">Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  return '<p class="checks"><label><input type="checkbox" id="tr-showout"'+(S.showOut ? ' checked' : '')+'> Show the '+out+' player'+(out === 1 ? '' : 's')+' who dropped out of the top 5</label>'+(hasShare(a) ? '<label><input type="checkbox" id="tr-share"'+(S.share ? ' checked' : '')+'> Plot predicted share of the vote instead of rank</label>' : '')+'</p><div class="scroll"><table class="stbl" id="tr-table"><thead><tr><th class="l">Player</th><th>Now</th><th>Best</th><th>Days in top 5</th><th class="l">First entered</th><th class="l">Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function render(){
   var a = S.award, label = AWARDS.filter(function(x){ return x[0] === a; })[0][1], n = SNAP.dates.length, ser = series(a), inNow = ser.filter(function(p){ return p.now; }).length, dropped = ser.length - inNow;
   el('tr-title').textContent = label+' race, day by day';
-  el('tr-sub').textContent = n+' game dates from '+LIB.fmtDay(SNAP.dates[0])+' to '+LIB.fmtDay(SNAP.dates[n-1])+'. '+ser.length+' players have held a top-5 spot; '+dropped+' of them have dropped out. Lines are the model\u2019s ranking after each day\u2019s games, with the same eligibility rules the ladder uses, so early days can be thin.';
+  el('tr-sub').textContent = n+' game dates from '+LIB.fmtDay(SNAP.dates[0])+' to '+LIB.fmtDay(SNAP.dates[n-1])+'. '+ser.length+' players have held a top-5 spot; '+dropped+' of them have dropped out. Lines are the model\u2019s ranking after each day\u2019s games, with the same eligibility rules the ladder uses, so early days can be thin.'+(S.share && hasShare(a) ? ' In the share view, each line is the model\u2019s predicted share of the vote that day, calibrated on the real voting since 2003-04.' : '');
   el('tr-wrap').innerHTML = chart(a); el('tr-tbl').innerHTML = table(a);
   el('tr-sr').textContent = label+': '+ser.filter(function(p){ return p.now; }).map(function(p){ return '#'+p.now+' '+p.name; }).join(', ')+'.';
   Array.prototype.forEach.call(document.querySelectorAll('#tr-chips .chip'), function(b){ b.setAttribute('aria-pressed', b.getAttribute('data-a') === a ? 'true' : 'false'); });
@@ -4081,7 +4360,7 @@ function init(){
   sec.innerHTML = '<h2 id="tr-title"></h2><p class="smn" id="tr-sub"></p><div class="presets" id="tr-chips" role="group" aria-label="Award">'+AWARDS.map(function(x){ return '<button type="button" class="chip" data-a="'+x[0]+'" aria-pressed="false">'+x[1]+'</button>'; }).join('')+'</div>'+
     '<div class="trwrap" id="tr-wrap"></div><p class="sr" id="tr-sr"></p><div id="tr-tbl"></div><p class="smn">Season in progress only. The tracker is rebuilt from scratch each day from the games played, so it never depends on what the page showed before; a change to a model changes its whole history.</p>';
   if (glance && glance.parentNode) glance.parentNode.insertBefore(sec, glance.nextSibling); else host.appendChild(sec);
-  el('tr-tbl').addEventListener('change', function(e){ if (e.target.id === 'tr-showout'){ S.showOut = e.target.checked; render(); } });
+  el('tr-tbl').addEventListener('change', function(e){ if (e.target.id === 'tr-showout'){ S.showOut = e.target.checked; render(); } if (e.target.id === 'tr-share'){ S.share = e.target.checked; render(); } });
   el('tr-chips').addEventListener('click', function(e){ var b = e.target.closest ? e.target.closest('[data-a]') : null; if (b){ S.award = b.getAttribute('data-a'); render(); } });
   var hl = null;
   el('tr-wrap').addEventListener('pointerover', function(e){ var t = e.target.closest ? e.target.closest('[data-pid]') : null; var pid = t ? t.getAttribute('data-pid') : null; if (pid === hl) return; hl = pid; Array.prototype.forEach.call(document.querySelectorAll('#tr-svg .trline'), function(l){ l.style.strokeOpacity = pid ? (l.getAttribute('data-pid') === pid ? 1 : 0.15) : ''; }); });
@@ -4118,18 +4397,22 @@ function scorecard(){
   [['All-NBA teams (15 players)', ['an1','an2','an3'], function(k){ return A.allnba(k, true); }, 15], ['All-Defensive teams (10)', ['ad1','ad2'], function(k){ return A.alldef(k, false); }, 10], ['All-Rookie teams (10)', ['ar1','ar2'], function(k){ return A.allrookie(k); }, 10]].forEach(function(a){
     rows += '<tr><td class="l">'+a[0]+' <span class="smn">(real selections found)</span></td>'+seasons.map(function(k){ if (a[0].indexOf('Rookie') >= 0 && !L.hist[String(+k - 1)]) return '<td>\u2013</td>'; return '<td>'+teamHits(a[2], a[1], k, a[3])+'</td>'; }).join('')+'</tr>';
   });
-  return '<div class="scroll"><table class="stbl"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div><p class="smn">Each model run on every finished season with full-year numbers. The award models were tuned on these same seasons (the defensive ballot model was fitted on All-Defensive vote shares with a stricter hold-one-season-out test, which found about the same), so this shows they reproduce history, not that they will predict the future.</p>';
+  return '<div class="scroll"><table class="stbl"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div><p class="smn">Each model run on every finished season with full-year numbers. The award models were tuned on these same seasons (the defensive ballot model and the MVP and Sixth Man team-success weights were fitted on the real voting with stricter hold-one-season-out tests, which found about the same), so this shows they reproduce history, not that they will predict the future.</p>';
 }
 function histTable(){
   var rows = L.backtest.slice().sort(function(a, b){ return +b.k - +a.k; }), tuned = {'2023':1,'2024':1,'2025':1,'2026':1};
-  var f = function(v){ return v === null || v === undefined ? '\u2013' : '#'+v; }, th = function(v){ return v ? v[0]+'/'+v[2] : '\u2013'; };
+  /* cells are shaded by how close the model came: warm for a winner found or most selections found, cool for a miss */
+  var hc = function(v){ return v === null || v === undefined ? '' : v === 1 ? ' class="h1"' : v <= 3 ? ' class="h2"' : v <= 5 ? ' class="h3"' : v <= 10 ? ' class="h4"' : ' class="h5"'; };
+  var tc = function(v){ if (!v || !v[2]) return ''; var q = v[0]/v[2]; return q >= 0.8 ? ' class="h1"' : q >= 0.65 ? ' class="h2"' : q >= 0.5 ? ' class="h3"' : q >= 0.35 ? ' class="h4"' : ' class="h5"'; };
+  var f = function(v){ return '<td'+hc(v)+'>'+(v === null || v === undefined ? '\u2013' : '#'+v)+'</td>'; }, th = function(v){ return '<td'+tc(v)+'>'+(v ? v[0]+'/'+v[2] : '\u2013')+'</td>'; };
   var sum = function(key, pred){ var n1 = 0, n3 = 0, n = 0; rows.forEach(function(r){ if (!pred(r) || r[key] === null || r[key] === undefined) return; n++; if (r[key] === 1) n1++; if (r[key] <= 3) n3++; }); return n ? n1+' of '+n+' at #1, '+n3+' in the top 3' : '\u2013'; };
   var tsum = function(key, pred){ var a = 0, b = 0; rows.forEach(function(r){ if (!pred(r) || !r[key]) return; a += r[key][0]; b += r[key][2]; }); return b ? a+'/'+b+' ('+Math.round(100*a/b)+'%)' : '\u2013'; };
   var out = '<div class="scroll"><table class="stbl"><thead><tr><th class="l">Season</th><th>MVP</th><th>Defensive Player</th><th>Rookie</th><th>Sixth Man</th><th>Most Improved</th><th>All-NBA</th><th>All-Defensive</th><th>All-Rookie</th></tr></thead><tbody>';
-  out += '<tr class="tot"><td class="l">Out of sample (before 2022-23)</td><td>'+sum('mvp', function(r){ return !tuned[r.k]; })+'</td><td>'+sum('dpoy', function(r){ return !tuned[r.k]; })+'</td><td>'+sum('roy', function(r){ return !tuned[r.k]; })+'</td><td>'+sum('smoy', function(r){ return !tuned[r.k]; })+'</td><td>'+sum('mip', function(r){ return !tuned[r.k]; })+'</td><td>'+tsum('an', function(r){ return !tuned[r.k]; })+'</td><td>'+tsum('ad', function(r){ return !tuned[r.k]; })+'</td><td>'+tsum('ar', function(r){ return !tuned[r.k]; })+'</td></tr>';
-  out += '<tr class="tot"><td class="l">Tuning seasons (2022-23 on)</td><td>'+sum('mvp', function(r){ return tuned[r.k]; })+'</td><td>'+sum('dpoy', function(r){ return tuned[r.k]; })+'</td><td>'+sum('roy', function(r){ return tuned[r.k]; })+'</td><td>'+sum('smoy', function(r){ return tuned[r.k]; })+'</td><td>'+sum('mip', function(r){ return tuned[r.k]; })+'</td><td>'+tsum('an', function(r){ return tuned[r.k]; })+'</td><td>'+tsum('ad', function(r){ return tuned[r.k]; })+'</td><td>'+tsum('ar', function(r){ return tuned[r.k]; })+'</td></tr>';
-  rows.forEach(function(r){ out += '<tr><td class="l">'+LIB.seasonLabel(r.k)+(tuned[r.k] ? ' <span class="smn">(tuned)</span>' : '')+'</td><td>'+f(r.mvp)+'</td><td>'+f(r.dpoy)+'</td><td>'+f(r.roy)+'</td><td>'+f(r.smoy)+'</td><td>'+f(r.mip)+'</td><td>'+th(r.an)+'</td><td>'+th(r.ad)+'</td><td>'+th(r.ar)+'</td></tr>'; });
-  return out+'</tbody></table></div><p class="smn">A dash means the real winner did not meet the model\u2019s eligibility rule that season (for example, fewer than 70% of games played) or the season has no earlier season to compare against. The defensive ballot weights (fitted on All-Defensive vote shares) and the Most Improved rules were refitted on all of these seasons while holding each one out in turn, so for those two the rows are not fully out of sample.</p>';
+  out += '<tr class="tot"><td class="l">Seasons before 2022-23</td><td>'+sum('mvp', function(r){ return !tuned[r.k]; })+'</td><td>'+sum('dpoy', function(r){ return !tuned[r.k]; })+'</td><td>'+sum('roy', function(r){ return !tuned[r.k]; })+'</td><td>'+sum('smoy', function(r){ return !tuned[r.k]; })+'</td><td>'+sum('mip', function(r){ return !tuned[r.k]; })+'</td><td>'+tsum('an', function(r){ return !tuned[r.k]; })+'</td><td>'+tsum('ad', function(r){ return !tuned[r.k]; })+'</td><td>'+tsum('ar', function(r){ return !tuned[r.k]; })+'</td></tr>';
+  out += '<tr class="tot"><td class="l">2022-23 onward</td><td>'+sum('mvp', function(r){ return tuned[r.k]; })+'</td><td>'+sum('dpoy', function(r){ return tuned[r.k]; })+'</td><td>'+sum('roy', function(r){ return tuned[r.k]; })+'</td><td>'+sum('smoy', function(r){ return tuned[r.k]; })+'</td><td>'+sum('mip', function(r){ return tuned[r.k]; })+'</td><td>'+tsum('an', function(r){ return tuned[r.k]; })+'</td><td>'+tsum('ad', function(r){ return tuned[r.k]; })+'</td><td>'+tsum('ar', function(r){ return tuned[r.k]; })+'</td></tr>';
+  rows.forEach(function(r){ out += '<tr><td class="l">'+LIB.seasonLabel(r.k)+'</td>'+f(r.mvp)+f(r.dpoy)+f(r.roy)+f(r.smoy)+f(r.mip)+th(r.an)+th(r.ad)+th(r.ar)+'</tr>'; });
+  out += '</tbody></table></div><p class="hkey"><span><i class="h1" style="background:color-mix(in srgb,var(--hot) 55%,transparent)"></i>winner ranked #1 / 80%+ of selections</span><span><i style="background:color-mix(in srgb,var(--hot) 34%,transparent)"></i>#2\u20133 / 65%+</span><span><i style="background:color-mix(in srgb,var(--hot) 16%,transparent)"></i>#4\u20135 / 50%+</span><span><i style="background:color-mix(in srgb,var(--cold) 16%,transparent)"></i>#6\u201310 / 35%+</span><span><i style="background:color-mix(in srgb,var(--cold) 38%,transparent)"></i>#11 or worse / under 35%</span></p>';
+  return out+'<p class="smn">A dash means the real winner did not meet the model\u2019s eligibility rule that season (for example, fewer than 70% of games played) or the season has no earlier season to compare against. The defensive ballot weights (fitted on All-Defensive vote shares), the MVP and Sixth Man team-success weights (fitted on those awards\u2019 voting) and the Most Improved rules were refitted on all of these seasons while holding each one out in turn, so for those the rows are not fully out of sample.</p>';
 }
 function age(iso){
   var h = (Date.now() - Date.parse(iso)) / 3600000; if (!isFinite(h) || h < 0) return '';
@@ -4141,11 +4424,12 @@ function init(){
     '<section class="card aboutsec"><h2>Last data refresh</h2><p><b>Games through '+LIB.fmtDay(L.asof, true)+'</b> ('+L.games+' games played this season, no team past '+L.maxg+').</p>'+
       (built ? '<p>This page was built '+esc(new Date(built).toLocaleString('en-US', {dateStyle:'medium', timeStyle:'short'}))+' ('+age(built)+').</p>' : '<p>This build did not record when it was made.</p>')+
       ((L.warnings || []).map(function(w){ return '<p class="warn">'+esc(w)+'</p>'; }).join(''))+
+      (L.injuryLogNote ? '<p class="warn"><b>Reminder.</b> '+esc(L.injuryLogNote)+'</p>' : (L.injuryLogDays ? '<p class="smn">The daily build has logged the injury report for '+L.injuryLogDays+' day'+(L.injuryLogDays === 1 ? '' : 's')+'; after 60 it will ask you to check the report against who actually dressed.</p>' : ''))+
       (stale ? '<p class="warn">That is more than two days ago. If this is your own site, check that the daily update is running (the Actions tab of the repository).</p>' : '')+
       '<p class="smn">New games appear once the data source has published them, usually overnight or the next morning, and the daily update picks them up.</p></section>'+
-    '<section class="card aboutsec"><h2>What is here</h2><dl class="about"><dt>Shot Charts</dt><dd>Every tracked shot since 2022-23 by zone, with filters, comparisons and shot-profile twins.</dd><dt>League Leaders</dt><dd>Fourteen leaderboards and the Grizzlies roster.</dd><dt>Awards Watch</dt><dd>Top-5 candidates for six awards and projected All-NBA, All-Defensive and All-Rookie teams, from stat models, not votes, plus a day-by-day tracker of each race this season.</dd><dt>League Scoreboard</dt><dd>Every game day\u2019s scores with full box scores, score flow and shot maps, plus the standings.</dd><dt>Team Stats</dt><dd>Any two of 42 team statistics against each other, lineups and pairs, and defense shot charts.</dd><dt>Player Stats</dt><dd>Any two of about 40 player statistics against each other, including on/off ratings.</dd><dt>Projections</dt><dd>Projected wins and playoff odds, and how hard each team\u2019s schedule ahead is.</dd><dt>'+esc(window.NBA_ARENA_NAME || 'The Grindhouse')+'</dt><dd>Your favorite team\u2019s home, named after its arena: standing, next game, matchup preview, results, rotation, lineups and season trend.</dd></dl></section>'+
+    '<section class="card aboutsec"><h2>What is here</h2><dl class="about"><dt>Shot Charts</dt><dd>Every tracked shot since 2002-03 by zone (seasons before 2022-23 load when picked), with filters, comparisons, a difference map, shot quality against expectation, career arcs and shot-profile twins.</dd><dt>League Leaders</dt><dd>Fourteen leaderboards and the Grizzlies roster.</dd><dt>Awards Watch</dt><dd>Top-5 candidates for six awards, shown as predicted shares of the vote, and projected All-NBA, All-Defensive and All-Rookie teams, from stat models calibrated on the real voting since 2003-04, plus a day-by-day tracker of each race this season.</dd><dt>League Scoreboard</dt><dd>Every game day\u2019s scores with full box scores, score flow and shot maps, plus the standings.</dd><dt>Team Stats</dt><dd>Any two of 42 team statistics against each other, lineups and pairs, and defense shot charts.</dd><dt>Player Stats</dt><dd>Any two of about 40 player statistics against each other, including on/off ratings.</dd><dt>Projections</dt><dd>Projected wins and playoff odds, and how hard each team\u2019s schedule ahead is.</dd><dt>'+esc(window.NBA_ARENA_NAME || 'The Grindhouse')+'</dt><dd>Your favorite team\u2019s home, named after its arena: standing, next game, matchup preview, results, rotation, lineups and season trend.</dd></dl></section>'+
     '<section class="card aboutsec"><h2>How well the models reproduce history</h2><div id="ab-score"></div></section>'+
-    (L.backtest && L.backtest.length ? '<section class="card aboutsec" id="ab-hist"><h2>The same models on every season since 2002-03</h2><p class="smn">The award models were tuned on 2022-23 to 2025-26. The seasons before that are a true out-of-sample test: the models never saw them. Each cell is where the real winner ranked (lower is better); the team columns are how many of the real selections the model\u2019s picks included.</p><div id="ab-hist-body"></div></section>' : '')+
+    (L.backtest && L.backtest.length ? '<section class="card aboutsec" id="ab-hist"><h2>The same models on every season since 2002-03</h2><p class="smn">The Rookie ladder, the All-NBA rule and the Clutch formula were set while looking at 2022-23 to 2025-26, so the seasons before that are a true out-of-sample test for them. The defensive ballot weights, the MVP and Sixth Man team-success weights and the Most Improved rules were fitted on the real voting and awards of all of these seasons, each held out in turn when tested. Each cell is where the real winner ranked (lower is better); the team columns are how many of the real selections the model\u2019s picks included.</p><div id="ab-hist-body"></div></section>' : '')+
     '<section class="card aboutsec"><h2>Things to keep in mind</h2><ul class="about"><li>Everything comes from ESPN play-by-play and box scores, republished by sportsdataverse. Shot locations are ESPN\u2019s, so totals will not match NBA.com exactly.</li><li>Shots farther than 40 feet, free throws, All-Star games and the NBA Cup final are left out of the shot totals.</li><li>The stand-ins for tracking data (catch-and-shoot style versus off the dribble) read ESPN\u2019s shot descriptions; they work best on threes. Screens, pick-and-roll and defender distance are not in this data at all.</li><li>On/off ratings and lineups are rebuilt from substitution records and used only for games where every player\u2019s rebuilt minutes agree with the box score (about 97% of games). They are noisy, especially early in a season.</li><li>Ratings are per 100 possessions with possessions estimated from the box score, so they will not match NBA.com to the decimal.</li><li>The projections ignore injuries, trades and tiebreaker rules, and the schedule data is missing the last two games per team.</li><li>Early in a season every list is a small sample and will keep reshuffling.</li>'+(window.NBA_ARCHIVE && window.NBA_ARCHIVE.keys().length ? '<li>Seasons before the last five are kept in separate files and load when you pick them (about 1 to 2 MB each) on the Shot Charts, Team Stats, Player Stats and defense-chart season menus. The Awards Watch, League Scoreboard, Projections and Grindhouse tabs cover the last five seasons only. Before 2017-18 ESPN\u2019s substitution records are too thin to rebuild lineups, so those seasons have no on/off or lineup figures; each season menu says so. Old franchises appear under today\u2019s codes (Seattle as OKC, New Jersey as BKN).</li>' : '')+'</ul></section>';
   el('ab-score').innerHTML = scorecard();
   if (L.backtest && L.backtest.length) el('ab-hist-body').innerHTML = histTable();

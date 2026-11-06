@@ -44,7 +44,21 @@ if len(gb) != leaders['games']: problems.append(f'box scores for {len(gb)} games
 elif any((not g[2]) or (not g[3]) or g[1] is None for g in gb): problems.append('some games have no box score or score-flow data')
 if not isinstance(leaders.get('remaining'), list): problems.append('the remaining schedule is missing')
 if not leaders.get('builtAt'): problems.append('the build time is missing')
-for w in leaders.get('warnings') or []: problems.append('WARNING: ' + w)
+best = shot.get('best') or {}
+if len(best) < 300: problems.append(f'the best-season map has only {len(best)} players (the Show Best Season checkboxes need it)')
+else:
+    known = set(seasons) | set((shot.get('archive') or {}).keys())
+    stray = [k for k in {v[0] for v in best.values()} if k not in known]
+    if stray: problems.append(f'best seasons point at seasons not on the page: {sorted(stray)}')
+if len(shot.get('arc') or {}) < 300: problems.append('the career-arc map is missing or nearly empty')
+if not (leaders.get('awardfit') or {}).get('mvp', {}).get('tau'): problems.append('awardfit (vote-share temperatures) is missing from the leaders block')
+if leaders.get('injuryLogNote'): print('note:', leaders['injuryLogNote'])
+gm = leaders.get('gamemodel') or {}
+if not all(k in gm for k in ('K', 'PW', 'GAP', 'HCA', 'B2B', 'SIG')) or not gm.get('avail'): problems.append('gamemodel (the fitted win-chance constants) is missing or incomplete in the leaders block')
+if not isinstance(leaders.get('injuries'), dict): problems.append('the injury report block is missing (should be a dict, possibly empty)')
+for w in leaders.get('warnings') or []:
+    if w.startswith('ESPN injury report'): print('note:', w)   # an unreadable injury feed is shown on the About tab but must not block the daily publish
+    else: problems.append('WARNING: ' + w)
 if leaders.get('roster') is not None and len(leaders['roster'].get('roster', [])) < 13: problems.append('the Grizzlies roster has fewer than 13 players')
 sn = leaders.get('snapshots')
 if not sn or not sn.get('dates'): problems.append('the award tracker (snapshots) is missing')

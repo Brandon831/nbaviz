@@ -1,0 +1,34 @@
+The game model fitted on the box scores of 2003-04 to 2025-26, with the seasons bootstrap, run 2026-11-05 with python fit_gamemodel.py --write
+
+27278 regular-season games, 2003-04 to 2025-26
+
+== Blend constants (held-out log loss of the home win chance; the page uses K=10, PW=0.4) ==
+   K    PW  log loss  accuracy
+  15   0.5    0.6106     66.4%
+  15   0.6    0.6106     66.4%
+  20   0.5    0.6107     66.4%
+  20   0.4    0.6107     66.4%
+  10   0.6    0.6107     66.3%
+  15   0.4    0.6108     66.4%
+page  10   0.4    0.6112     66.2%
+
+== Margin model with K=15, PW=0.5 (least squares on the home margin) ==
+  all seasons      GAP +0.969, HCA +2.44, B2B +2.02, SIG 12.59  (27278 games)
+  2017-18 onward   GAP +1.015, HCA +1.92, B2B +2.36, SIG 13.68  (10610 games)
+  home edge by season: 2003-04 +3.5, 2004-05 +2.9, 2005-06 +3.1, 2006-07 +2.7, 2007-08 +3.2, 2008-09 +3.1, 2009-10 +2.2, 2010-11 +2.9, 2011-12 +2.7, 2012-13 +3.0, 2013-14 +2.2, 2014-15 +2.3, 2015-16 +2.6, 2016-17 +2.9, 2017-18 +1.9, 2018-19 +2.6, 2019-20 +2.2, 2020-21 +1.0, 2021-22 +1.5, 2022-23 +2.5, 2023-24 +2.2, 2024-25 +1.7, 2025-26 +1.7
+
+  2017-18 onward, each season held out: page constants log loss 0.6235 (accuracy 65.4%); fitted without rest 0.6245 (65.3%); fitted with rest 0.6223 (65.5%)
+  bootstrap over seasons (gain in log loss, positive = better):
+   rest term (fitted with vs without)                        +0.002 per season [95% +0.001, +0.003] over 9 seasons: ADOPT
+   fitted constants with rest vs the earlier fixed constants +0.002 per season [95% +0.000, +0.003] over 9 seasons: SMALL
+   blend K=15, PW=0.5 vs K=10, PW=0.4                        +0.001 per season [95% +0.000, +0.001] over 23 seasons: SMALL
+   -> the blend change does not clear the bar; --write keeps K=10, PW=0.4
+
+== Availability (regulars who did not play; RAPM from the previous season) ==
+  9397 games 2018-19 to 2025-26; games with at least one regular out on either side: 98%
+  bootstrap: availability vs none (gain in log loss)         +0.010 per season [95% +0.006, +0.014] over 8 seasons: ADOPT
+  held out: without availability log loss 0.6226 (65.5%); with (previous-season RAPM) 0.6131 (66.2%); with (same-season RAPM, hindsight ceiling) 0.6106 (66.4%)
+  coefficients: value -0.24 per point of (RAPM x minutes share), minutes share -1.97; implied replacement level -8.1 per 100 possessions; SIG 13.61
+  example: a +4 RAPM player at 34 minutes costs 2.1 points of margin when out; a 0 RAPM player at 20 minutes 0.8
+
+wrote static/gamemodel.json: {"K": 10, "PW": 0.4, "GAP": 0.972, "HCA": 1.92, "B2B": 2.36, "SIG": 13.68, "avail": {"value": -0.242, "mins": -1.971, "repl": -8.13, "from": 2019}}

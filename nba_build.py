@@ -136,10 +136,21 @@ def build_season(raw, y, names, cup_id):
     gg = d.groupby('game_id').agg(st=('season_type', 'first'), h=('home_team_abbrev', 'first'), a=('away_team_abbrev', 'first'),
                                   hs=('home_score', 'max'), as_=('away_score', 'max')).reset_index()
     gg = gg[gg.st == 2]
-    rec = {t: [0, 0] for t in TEAM_DIV}
+    # standings come from the box scores, which always carry the final score; the play-by-play (which stops short of the final in many early-season
+    # games and lacks a few games altogether) only fills in a game the box scores do not have
+    rec = {t: [0, 0] for t in TEAM_DIV}; seen = set()
+    try:
+        bx = box_games(raw, y, cup_id); bh = bx[bx.home_away.str.lower() == 'home'].drop_duplicates('game_id')
+        for r_ in bh.itertuples():
+            if r_.team_abbreviation in rec and r_.opponent_team_abbreviation in rec and r_.team_score != r_.opponent_team_score:
+                hw = r_.team_score > r_.opponent_team_score; rec[r_.team_abbreviation][0 if hw else 1] += 1; rec[r_.opponent_team_abbreviation][1 if hw else 0] += 1; seen.add(r_.game_id)
+    except Exception as e:
+        print('  standings from box scores skipped:', e, file=sys.stderr)
+    filled = 0
     for r_ in gg.itertuples():
-        hw = r_.hs > r_.as_
-        rec[r_.h][0 if hw else 1] += 1; rec[r_.a][1 if hw else 0] += 1
+        if r_.game_id in seen: continue
+        hw = r_.hs > r_.as_; rec[r_.h][0 if hw else 1] += 1; rec[r_.a][1 if hw else 0] += 1; filled += 1
+    if filled: print(f'  {y}: {filled} game(s) not in the box scores, standings completed from the play-by-play', file=sys.stderr)
     pf = lambda t: (Fraction(rec[t][0], sum(rec[t])) if sum(rec[t]) else Fraction(-1))
     stand = {t: {'w': rec[t][0], 'l': rec[t][1], 'div': TEAM_DIV[t], 'conf': CONF_OF[TEAM_DIV[t]], 'd1': 0, 'dt': 0, 'c1': 0, 'ct': 0} for t in TEAM_DIV}
     for dv, ts in DIVS.items():
@@ -244,7 +255,7 @@ def box_players(raw, y, cup_id):
     d = box_games(raw, y, cup_id)
     games = int(d.game_id.nunique()); asof = str(d.game_date.max())
     tg = {k: int(v) for k, v in d.groupby('team_abbreviation').game_id.nunique().items()}
-    act = d[(d.did_not_play == False) & d.minutes.notna()].sort_values(['game_date', 'game_date_time'])
+    act = d[(d.did_not_play == False) & (d.minutes > 0)].sort_values(['game_date', 'game_date_time'])
     g = act.groupby('athlete_id')
     a = g[COLS].sum().astype(float); a['gp'] = g.game_id.nunique()
     a['gst'] = act[act.starter == True].groupby('athlete_id').game_id.nunique().reindex(a.index).fillna(0).astype(int)
@@ -257,7 +268,7 @@ def box_players(raw, y, cup_id):
     return {'asof': asof, 'games': games, 'maxg': int(max(tg.values())), 'tg': tg, 'players': players, 'pos': {str(k): v for k, v in positions(d).items()}}, d
 
 def team_ratings(d):
-    act = d[(d.did_not_play == False) & d.minutes.notna()]
+    act = d[(d.did_not_play == False) & (d.minutes > 0)]
     t = act.groupby(['game_id', 'team_abbreviation']).agg(pts=('team_score', 'first'), fga=('field_goals_attempted', 'sum'), fta=('free_throws_attempted', 'sum'),
         oreb=('offensive_rebounds', 'sum'), tov=('turnovers', 'sum'), opp=('opponent_team_abbreviation', 'first'), opts=('opponent_team_score', 'first')).reset_index()
     t['poss'] = t.fga + 0.44 * t.fta - t.oreb + t.tov
@@ -309,7 +320,7 @@ TG_WIDTH = 42     # per game: date index, home team, away team, minutes, then ea
 TG_COLS = ['points', 'field_goals_made', 'field_goals_attempted', 'three_point_field_goals_made', 'three_point_field_goals_attempted', 'free_throws_made',
            'free_throws_attempted', 'offensive_rebounds', 'defensive_rebounds', 'assists', 'steals', 'blocks', 'turnovers', 'fouls']
 def team_games(raw, y, d, shotgrp):
-    act = d[(d.did_not_play == False) & d.minutes.notna()]
+    act = d[(d.did_not_play == False) & (d.minutes > 0)]
     tot = act.groupby(['game_id', 'team_abbreviation'])[TG_COLS].sum()
     gmin = act.groupby('game_id').minutes.sum() / 10
     meta = d.drop_duplicates(['game_id', 'team_abbreviation'])[['game_id', 'team_abbreviation', 'game_date', 'home_away', 'team_score']]
@@ -333,6 +344,30 @@ def team_games(raw, y, d, shotgrp):
 
 # ----------------------------------------------------------------------------- Grizzlies roster from ESPN's public feed (falls back to static/roster.json)
 ESPN_ROSTER_URL = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/mem/roster'
+ESPN_INJURIES_URL = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries'
+def injuries_from_espn(team_ids):
+    """ESPN's league-wide injury report: {team: [[player id, name, status, detail, return date], ...]}, with team_ids = {ESPN team id: abbreviation}
+    from this season's box scores. Returns (report, note); the report is {} and the note says why if the feed cannot be read. Player ids are ESPN's,
+    the same ids the box scores use. The page prices each listing with the availability coefficients in static/gamemodel.json."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(urllib.request.Request(ESPN_INJURIES_URL, headers={'User-Agent': 'nba-dashboard'}), timeout=20) as r: j = json.load(r)
+    except Exception as e:
+        return {}, f'ESPN injury report could not be read ({e}); win chances assume full rosters'
+    out = {}; unmatched = 0; n = 0
+    for tm in j.get('injuries', []) or []:
+        team = (tm.get('team') or {}).get('abbreviation') or team_ids.get(str(tm.get('id'))) or team_ids.get(str((tm.get('team') or {}).get('id')))
+        for inj in tm.get('injuries', []) or []:
+            ath = inj.get('athlete') or {}; pid = ath.get('id'); n += 1
+            if not team and ath.get('team'): team = team_ids.get(str((ath.get('team') or {}).get('id')))
+            if not team or not pid: unmatched += 1; continue
+            det = inj.get('details') or {}; status = inj.get('status') or ((inj.get('type') or {}).get('description')) or ''
+            detail = ' '.join(x for x in [det.get('side'), det.get('type') or det.get('location'), det.get('detail')] if x) or (inj.get('shortComment') or '')[:60]
+            ret = det.get('returnDate') or ''; ret = ret[:10] if re.match(r'^\d{4}-\d{2}-\d{2}', ret) else ''
+            out.setdefault(team, []).append([int(pid), ath.get('displayName') or '', status, detail, ret])
+    note = f'{n} listings from ESPN' + (f', {unmatched} could not be matched to a team' if unmatched else '')
+    return out, note
+
 def roster_from_espn(static_roster):
     """The current roster and coach from ESPN's team feed. Two-way flags come from static/roster.json (matched by player id), since the feed does not
     mark them reliably. Returns None, and the build keeps the static file, if the feed cannot be read or looks incomplete."""
@@ -465,7 +500,7 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
     if cup_id is not None: d = d[d.game_id != cup_id]
     # chronological order: period, then game clock counting down, then ESPN's sequence number to break ties (sequence numbers alone sometimes interleave periods)
     d = d.assign(seq=d.sequence_number.astype(float), neg=-(d.clock_minutes * 60 + d.clock_seconds)).sort_values(['game_id', 'period_number', 'neg', 'seq'])
-    act = box_d[(box_d.did_not_play == False) & box_d.minutes.notna()]
+    act = box_d[(box_d.did_not_play == False) & (box_d.minutes > 0)]
     starters = {(int(g), int(t)): [int(x) for x in grp.athlete_id] for (g, t), grp in act[act.starter == True].groupby(['game_id', 'team_id'])}
     boxmin = {(int(g), int(p)): float(m) for g, p, m in zip(act.game_id, act.athlete_id, act.minutes)}
     roster = {(int(g), int(t)): set(int(x) for x in grp.athlete_id) for (g, t), grp in act.groupby(['game_id', 'team_id'])}
@@ -648,7 +683,7 @@ def flows_data(raw, y, cup_id):
 def game_boxes(d, gids, pm, flows):
     """One entry per game, in the order of the team-game rows: [game id, score margin at the end of each minute or None, home player lines, away player lines].
     A player line: [id, minutes, pts, reb, ast, stl, blk, tov, pf, fgm, fga, 3pm, 3pa, ftm, fta, oreb, plus-minus or None, started]."""
-    act = d[(d.did_not_play == False) & d.minutes.notna()]
+    act = d[(d.did_not_play == False) & (d.minutes > 0)]
     by = {int(g): grp for g, grp in act.groupby('game_id')}
     out = []
     for g in gids:
@@ -677,7 +712,7 @@ def award_snapshots(raw, y, d, cup_id, shot, leaders, awards, defmodel, top_n=8)
     """Replays the season day by day: after each game date, every award ladder is recomputed from the games played so far, with the same
     rules the page uses that day (including the games-played eligibility rule, which is why early dates can have few names)."""
     import awards_models
-    act = d[(d.did_not_play == False) & d.minutes.notna()].copy(); act['dt'] = act.game_date.astype(str)
+    act = d[(d.did_not_play == False) & (d.minutes > 0)].copy(); act['dt'] = act.game_date.astype(str)
     dates = sorted(act.dt.unique()); cur = str(y)
     plays = clutch_plays(raw, y, cup_id); plays['dt'] = plays.game_date.astype(str)
     M = awards_models.Models(shot, leaders, {}, awards, defmodel)
@@ -695,9 +730,11 @@ def award_snapshots(raw, y, d, cup_id, shot, leaders, awards, defmodel, top_n=8)
         M.STAND[cur] = {t: {'w': int(x.team_winner.sum()), 'l': int((~x.team_winner.astype(bool)).sum())} for t, x in games.groupby('team_abbreviation')}
         M.TEAMS[cur] = team_ratings(d[d.game_date.astype(str) <= D]); M.TD[cur] = M._tdef(cur)
         crow = clutch_sum(plays[plays.dt <= D])
-        pick = lambda lst: [[r['p']['pid'], round(r['score'], 2)] for r in lst[:top_n]]
-        out['awards']['mvp'].append(pick(M.mvp(cur, True))); out['awards']['dpoy'].append(pick(M.dpoy(cur, False))); out['awards']['roy'].append(pick(M.roy(cur)))
-        out['awards']['smoy'].append(pick(M.smoy(cur, True))); out['awards']['mip'].append(pick(M.mip(cur, fit, True))); out['awards']['clutch'].append(pick(M.clutch(cur, crow)))
+        def pick(lst, award):
+            sh = M.shares(lst, award)   # predicted share of the vote (static/awardfit.json), where the award has a fitted temperature
+            return [[r['p']['pid'], round(r['score'], 2)] + ([round(sh[i], 4)] if sh else []) for i, r in enumerate(lst[:top_n])]
+        out['awards']['mvp'].append(pick(M.mvp(cur, True), 'mvp')); out['awards']['dpoy'].append(pick(M.dpoy(cur, False), 'dpoy')); out['awards']['roy'].append(pick(M.roy(cur), 'roy'))
+        out['awards']['smoy'].append(pick(M.smoy(cur, True), 'smoy')); out['awards']['mip'].append(pick(M.mip(cur, fit, True), 'mip')); out['awards']['clutch'].append(pick(M.clutch(cur, crow), 'clutch'))
     return out
 
 # ----------------------------------------------------------------------------- MVP race: the MVP ladder re-run after every game date this season
@@ -722,7 +759,7 @@ def mvp_race(d, hist_players, hist_stand, top_n=8):
     if keys:
         for t, s in hist_stand[keys[0]].items():
             q[t] = s['w'] / (s['w'] + s['l']) if (s['w'] + s['l']) else 0.5
-    act = d[(d.did_not_play == False) & d.minutes.notna()].sort_values(['game_date', 'game_date_time'])
+    act = d[(d.did_not_play == False) & (d.minutes > 0)].sort_values(['game_date', 'game_date_time'])
     tgm = d.drop_duplicates(['game_id', 'team_abbreviation'])[['game_id', 'team_abbreviation', 'game_date', 'team_winner']]
     dates = sorted(str(x) for x in d.game_date.unique()); out = {'dates': dates, 'blend': {}, 'now': {}}
     snap_scores = []
@@ -761,7 +798,7 @@ def games_table(raw, y, horizon_days=14):
     sch = sch[sch.season_type == 2].copy() if 'season_type' in sch.columns else sch.copy()
     sch['start'] = pd.to_datetime(sch['start_date'], utc=True); sch['et'] = sch.start.dt.tz_convert('America/New_York')
     sch['edate'] = sch.et.dt.strftime('%Y-%m-%d'); sch['etime'] = sch.et.dt.strftime('%-I:%M %p ET')
-    box = readp(fetch(raw, 'box', y)); box = box[(box.did_not_play == False) & box.minutes.notna()]
+    box = readp(fetch(raw, 'box', y)); box = box[(box.did_not_play == False) & (box.minutes > 0)]
     top = box.sort_values(['points', 'minutes'], ascending=[False, True]).drop_duplicates('game_id').set_index('game_id')
     done = sch[sch.status_type_completed == True]
     last = done.edate.max() if len(done) else None
@@ -837,7 +874,7 @@ def build_blocks(raw, refresh_current=True):
     return shot, leaders
 
 # ----------------------------------------------------------------------------- archived seasons (one file each, loaded by the page on demand)
-ARCHIVE_VERSION = 7
+ARCHIVE_VERSION = 9
 def season_payload(raw, y):
     """Everything the page needs for one finished season, as one JSON-ready object. Cached in raw/ because finished seasons never change."""
     cache = os.path.join(raw, f'season{y}.json')
@@ -878,6 +915,38 @@ def assemble(template_path, shot, leaders, awards, out_path):
     open(out_path, 'w', encoding='utf-8').write(t)
     return len(t)
 
+def best_seasons(M, min_team_games=20):
+    """{player id: [season, score]}: the season in which the MVP formula rated the player highest. Each season is scored on its own (Game Score
+    per game plus the team-record term, with no blending of earlier seasons), among the seasons where the player met the MVP ladder's minimums
+    (70% of the team's games and 25 minutes a game). The current season counts once teams have played min_team_games, the page's own early-season
+    threshold, so that a hot October does not outrank a full season. Drives the "Show <name>'s Best Season" checkboxes on the Shot Charts tab."""
+    import awards_models
+    best = {}; keys = [k for k in M.KEYS if M.SEAS[k]['maxg'] >= min_team_games]
+    for k in keys:
+        for r in M.mvp(k, False):
+            pid = r['p']['pid']; sc = round(float(r['score']), 2)
+            if pid not in best or sc > best[pid][1]: best[pid] = [k, sc]
+    # players who never met those minimums: the best of their seasons with at least 20 games, scored the same way, flagged with a third element
+    for k in keys:
+        for p in M.SEAS[k]['players']:
+            pid = p['pid']
+            if pid in best and len(best[pid]) == 2 or p['gp'] < 20 or pid == 99999999: continue
+            sc = round(float(M.gs(p) / p['gp'] + M.BETA_MVP * (100 * M.team_T(k, p['team'], False) - 50)), 2)
+            if pid not in best or sc > best[pid][1]: best[pid] = [k, sc, 1]
+    return {str(pid): v for pid, v in best.items()}
+
+def career_arcs(M, min_team_games=20):
+    """{player id: [[season, score], ...]}: the MVP formula's score for every season with at least 20 games, in season order, for the career
+    sparkline on the Shot Charts tab. Scored like best_seasons (each season on its own); the current season counts once teams have played min_team_games."""
+    import awards_models
+    arc = {}
+    for k in M.KEYS:
+        if M.SEAS[k]['maxg'] < min_team_games: continue
+        for p in M.SEAS[k]['players']:
+            if p['gp'] < 20 or p['pid'] == 99999999: continue
+            arc.setdefault(str(p['pid']), []).append([int(k), round(float(M.gs(p) / p['gp'] + M.BETA_MVP * (100 * M.team_T(k, p['team'], False) - 50)), 1)])
+    return arc
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--raw', default='raw', help='folder for downloaded source files')
@@ -885,6 +954,7 @@ def main():
     ap.add_argument('--data-only', default=None, help='write the two data blocks as JSON files into this folder instead of the page')
     ap.add_argument('--template', default=os.path.join(HERE, 'template.html'))
     ap.add_argument('--built-at', default=None, help='timestamp to record in the page (defaults to now, in UTC); fixed for reproducible test builds')
+    ap.add_argument('--no-injuries', action='store_true', help='skip ESPN\'s injury report (the page then assumes full rosters)')
     ap.add_argument('--no-espn-roster', action='store_true', help='do not fetch the Grizzlies roster from ESPN; use static/roster.json as is')
     ap.add_argument('--no-refresh', action='store_true', help='do not re-download the season in progress (for testing)')
     ap.add_argument('--history', type=int, default=None, help='also build one data file per finished season back to this end-year (2004 = 2003-04), for the page to load on demand')
@@ -901,17 +971,41 @@ def main():
         for kind in ('pbp', 'box', 'sched'): fetch(a.raw, kind, CURRENT, refresh=True)
     shot, leaders = build_blocks(a.raw)
     awards = json.load(open(os.path.join(HERE, 'static', 'awards.json')))
+    af = os.path.join(HERE, 'static', 'awardfit.json'); leaders['awardfit'] = json.load(open(af)) if os.path.exists(af) else {}   # fitted team-record weights and vote-share temperatures (refit_awards.py), read by the models and the page
+    gf = os.path.join(HERE, 'static', 'gamemodel.json'); leaders['gamemodel'] = json.load(open(gf)) if os.path.exists(gf) else {}   # the fitted game model behind every win chance (fit_gamemodel.py)
+    import awards_models
+    payloads = {}
     if a.history:
         out_dir = a.archive_dir or os.path.join(os.path.dirname(os.path.abspath(a.out)), 'data')
         urls = json.load(open(a.archive_urls)) if a.archive_urls else {}
         shot['archive'] = build_archive(a.raw, a.history, out_dir, lambda y: urls.get(str(y), f'data/season-{y}.json'))
-        # the award models over every finished season: the Most Improved regression and the scorecard on the About tab
-        import awards_models
         payloads = {str(y): season_payload(a.raw, y) for y in range(a.history, SEASONS[0])}
-        M = awards_models.Models(shot, leaders, payloads, awards, json.load(open(os.path.join(HERE, 'static', 'defmodel.json'))))
+    # the award models over every season on file: the Most Improved regression and the scorecard on the About tab, and each player's best season
+    M = awards_models.Models(shot, leaders, payloads, awards, json.load(open(os.path.join(HERE, 'static', 'defmodel.json'))))
+    if a.history:
         leaders['mipfit'] = M.mip_fit(); leaders['backtest'] = M.backtest(leaders['mipfit'])
         print(f"Most Improved regression on {leaders['mipfit']['seasons']} seasons: {leaders['mipfit']['a']:+.3f} {leaders['mipfit']['b']:+.4f} x last-year Game Score; scorecard rows: {len(leaders['backtest'])}", file=sys.stderr)
+    shot['best'] = best_seasons(M); shot['arc'] = career_arcs(M); shot['bestBeta'] = M.BETA_MVP   # the team-record weight the best-season scores use, for the tooltip
+    print(f"best seasons by the MVP formula: {len(shot['best'])} players; career arcs: {sum(len(v) for v in shot['arc'].values())} player-seasons", file=sys.stderr)
     leaders['warnings'] = []
+    if getattr(a, 'no_injuries', False): leaders['injuries'] = {}; leaders['injuryNote'] = 'injury report skipped (--no-injuries)'
+    else:
+        try:
+            bx = readp(fetch(a.raw, 'box', CURRENT)); team_ids = {str(int(k)): v for k, v in bx.dropna(subset=['team_id']).drop_duplicates('team_id').set_index('team_id').team_abbreviation.items()}
+        except Exception as e: team_ids = {}
+        leaders['injuries'], leaders['injuryNote'] = injuries_from_espn(team_ids)
+        if not leaders['injuries']: leaders['warnings'].append(leaders['injuryNote'] + '. The Grindhouse and Projections win chances assume full rosters until the next build.')
+        print('injury report:', leaders['injuryNote'], f"({sum(len(v) for v in leaders['injuries'].values())} players on {len(leaders['injuries'])} teams)", file=sys.stderr)
+        # keep a dated copy of every report so the status weights can be checked against who actually dressed (check_injuries.py)
+        if leaders['injuries']:
+            logdir = os.path.join(HERE, 'logs', 'injuries'); os.makedirs(logdir, exist_ok=True); today = dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%d')
+            json.dump({'date': today, 'builtAt': BUILT_AT, 'asof': leaders['asof'], 'note': leaders['injuryNote'], 'report': leaders['injuries']}, open(os.path.join(logdir, f'{today}.json'), 'w'), separators=(',', ':'))
+    logdir = os.path.join(HERE, 'logs', 'injuries'); days = sorted(f[:10] for f in os.listdir(logdir) if re.match(r'^\d{4}-\d{2}-\d{2}\.json$', f)) if os.path.isdir(logdir) else []
+    leaders['injuryLogDays'] = len(days)
+    if len(days) >= 60 and not (leaders['gamemodel'].get('avail') or {}).get('status_checked'):
+        leaders['injuryLogNote'] = (f'The injury log now covers {len(days)} days ({days[0]} to {days[-1]}). Time to check the report against who actually dressed: '
+                                    'python check_injuries.py, then --write to store the measured status weights in static/gamemodel.json.')
+        print('REMINDER:', leaders['injuryLogNote'], file=sys.stderr)
     try:
         sch = readp(fetch(a.raw, 'sched', CURRENT)); notes = sch.notes_headline.fillna('').str.lower() if 'notes_headline' in sch.columns else None
         if notes is not None:

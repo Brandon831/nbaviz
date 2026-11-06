@@ -120,7 +120,9 @@ A few things are files you edit yourself:
 | `static/awards.json` | Real award winners and teams for every finished season since 2002-03 (add a season with `python add_awards.py 2027 winners.json`; from July the About tab reminds you when the latest season is missing), as `[espn_player_id, "type"]` pairs under each season's end year. Types: `mvp`, `fmvp`, `dpoy`, `roy`, `smoy`, `mip`, `clutch`, `an1`-`an3`, `ad1`-`ad2`, `ar1`-`ar2`. | After a season's awards are announced. Add a new year key (`"2027": [...]`). These drive the gold badges and the finished-season tests in the explanations. |
 | `static/roster.json` | The Grizzlies roster, coach and an "as of" date. Player IDs are filled in from the box scores when missing. | After roster moves. The page shows the "as of" date. |
 | `static/defmodel.json` | The defensive model's weights: the ballot model fitted on All-Defensive vote shares (`static/votes.json`), plus the box-score-only and defense-index fits on the real teams. The build reads it for the scorecard and the season tracker; the page's copy is the `DEFM` line in `template.html`, and `check_models.py` fails if the two differ. | Only if you refit the model (`python refit_defmodel.py --write`), and then update the `DEFM` line too. |
-| `static/votes.json` | Full All-Defensive voting points for every vote-getter, 2003-04 to 2025-26, from Basketball-Reference's awards pages (`python add_votes.py 2027 awards_2027.html`). The ballot model is fitted on these. | After a season's voting is published, if you want to refit. |
+| `static/votes.json` | Every award's voting points for every vote-getter, from Basketball-Reference's awards pages (`python add_votes.py 2027 awards_2027.html`). The ballot model, the MVP and Sixth Man weights and the vote-share temperatures are fitted on these. | After a season's voting is published, if you want to refit. |
+| `static/awardfit.json` | The fitted team-record weights and vote-share temperatures (`python refit_awards.py --write`). The build embeds it; the page and `awards_models.py` read it from the leaders block. | Only when you refit. |
+| `static/gamemodel.json` | The fitted win-chance constants and availability coefficients (`python fit_gamemodel.py --write`). The build embeds it; the page reads it as `L.gamemodel`. | Only when you refit, perhaps once a season. |
 
 ## Rolling over to a new season
 
@@ -170,8 +172,111 @@ to steals and blocks). The defense index and adjusted plus-minus views were not 
 To add a season, save `https://www.basketball-reference.com/awards/awards_<year>.html` from your browser and run
 `python add_votes.py <year> <saved file>` (it reads the hidden table from the HTML, matches names to ESPN ids, and reports any it cannot
 match, listing the box-score names with the same surname; add the spelling to `ALIASES` in the script, as was done for Darrell
-Armstrong, whom ESPN lists as Darrel). Each season's points should add up to 7.5 times the points possible (every voter gives 15);
+Armstrong, whom ESPN lists as Darrel; the table now also covers Herrmann, Ayón, Jeff Taylor, Marcelo Huertas and Ron Holland). Each season's points should add up to 7.5 times the points possible (every voter gives 15);
 2005-06, 2008-09 and 2010-11 are off by a few points on the source pages themselves.
+
+## The rule for model changes: bigger than the noise between seasons
+
+Every fitting script now ends with a bootstrap over seasons (`bootstrap.py`): a change is tested by holding each season out, which gives
+one gain per season; the script resamples those seasons and prints the mean gain with a 95% interval and a verdict. ADOPT means the
+interval excludes zero and the mean clears a threshold a reader could notice (log loss 0.002, rank correlation 0.02, half a selection
+per season, a tenth of a winner per season); SMALL means consistent but below that; NOISE means the interval includes zero. `--write`
+only adopts changes that come out ADOPT and keeps the simpler constant otherwise. Under this rule the recent refits kept the Sixth Man
+weight (0.14, rank correlation +0.043 [+0.024, +0.065]), the two-era Defensive Player ballot model (rank correlation +0.054 [+0.017,
++0.089], though its selections-found gain of +0.56 per season [-0.22, +1.44] is not distinguishable from noise), the rest term (+0.002
+of log loss [+0.001, +0.003]) and the availability adjustment (+0.010 [+0.006, +0.014]); it reverted the MVP weight to 0.2 (+0.002
+[-0.004, +0.010]) and the blend to K=10, PW=0.4 (+0.001 [+0.000, +0.001], consistent but negligible). Refit at most once a season.
+
+## Every award is scored against its real voting
+
+`static/votes.json` now holds every voting table from the Basketball-Reference awards pages (MVP, Defensive Player, Rookie, Sixth Man,
+Most Improved, Clutch Player, All-NBA, All-Defensive and All-Rookie) for every season from 2003-04 to 2025-26 (add a season with
+`python add_votes.py <year> <saved page>`). `python refit_awards.py`
+scores each ladder against its vote (where the real winner ranks, Spearman correlation among the vote-getters, the share of voting
+points that fall inside the model's eligible pool), fits a within-season softmax temperature per award so that a ladder's scores can
+be read as predicted vote shares, and fits the team-record weight of the MVP and Sixth Man scores. `--write` stores the result in
+`static/awardfit.json`, which the build embeds as `leaders.awardfit`; `awards_models.py` and the page read it from there, and
+`check_models.py` fails if they disagree. Results on the 23 seasons: the MVP ladder ranks the real winner first in 16 of 23
+(correlation 0.74 among vote-getters), Rookie 22 of 23 (0.76), Sixth Man 14 of 23 (15 with the fitted weight), Defensive Player 13 of
+23, Most Improved 9 of 23. The fit put the MVP weight at 0.22 per point of winning percentage, but the gain over 0.2 is noise, so
+0.2 stays; the Sixth Man weight is 0.14 (held out, correlation 0.59 to 0.64, a real gain). The Awards cards show the predicted share of
+the vote as the headline number, with the raw score in the detail line.
+
+**Two-era ballot model.** From 2017-18, when lineups can be rebuilt, the Defensive Player ballot model adds defensive RAPM and
+opponent rim shooting on/off to the six ballot features (`defmodel.json` → `recent`, fitted by `refit_awards.py`). Held out one
+season at a time over 2017-18 to 2025-26, the nine-feature fit found 57 of 90 All-Defensive selections against 52 for the six-feature
+fit, and its rank correlation with the vote rose from 0.61 to 0.66. Seasons before 2017-18 keep the six-feature weights. The page's
+`DEFM_RECENT` constant holds the recent-era block.
+
+## The game model: fitted constants, rest and availability
+
+Every win chance on the page (the Grindhouse next game and schedule, the Projections simulation) comes from `static/gamemodel.json`,
+fitted by `python fit_gamemodel.py --write` on the box scores in `raw/` (needs the cached seasons from a `--history 2003` build). The
+model: strength = this season's net rating blended with PW of last season's, this season weighted n/(n+K); expected home margin =
+GAP x (strength gap) + HCA - B2B x (home on a back-to-back) + B2B x (away on a back-to-back) + availability; win chance = Phi(margin / SIG).
+Fitted on 27,278 games of 2003-04 to 2025-26 with each season held out. The blend stays at K=10, PW=0.4: the fit preferred K=15,
+PW=0.5, but by 0.001 of log loss, below the bar. On 2017-18 onward, GAP 0.97, HCA 1.9 (home court has fallen from 3.5 points in 2003-04
+to about 1.7), B2B 2.4 points, SIG 13.7. The rest term improved the held-out log loss by 0.002, consistently across seasons.
+
+**Availability.** The build fetches ESPN's injury report (`injuries_from_espn`, embedded as `leaders.injuries`; `--no-injuries` skips
+it) and the page prices each listing: cost = minutes share x (value x RAPM + mins), with value -0.28 and mins -1.97 fitted on which
+regulars actually sat out each game from 2018-19 on (RAPM from the previous season). So a missing regular costs about 2 points of
+margin per full game of minutes almost regardless of who he is, plus 0.24 per point of RAPM; knowing who sat out improved the held-out
+log loss from 0.6226 to 0.6131 (0.6106 with same-season RAPM, the hindsight ceiling). Live, a listing is weighted by status (Out 1,
+Doubtful 0.8, Questionable or Day-To-Day 0.5, Probable 0.15, hand-set until measured), fades over the following days unless a return
+date is given (Out: full for 3 days then to zero by day 21; shorter statuses by day 5), and is scaled by how much of the team's rating
+was earned with the player on the floor, so a player out all season does not count twice.
+
+**Checking the live plumbing.** The status weights and the fade are the least-evidenced part of the model, so the daily build saves
+each day's report to `logs/injuries/<date>.json` (the workflow commits it) and, once the log covers 60 days, prints a reminder and
+shows one on the About tab. Then `python check_injuries.py` compares every listing with whether the player recorded minutes in his
+team's next game: the share who did not play, by status, is the weight to use, and the script also measures how long an "Out" listing
+holds and how often players beat ESPN's return date. `--write` stores the measured weights in `static/gamemodel.json` (`avail.status`),
+which the page reads on the next build. The Projections tab lists the report with each player's cost; the
+Grindhouse next-game panel itemizes the margin. If the feed cannot be read the page says so on the About tab and assumes full rosters;
+`check_build.py` reports that as a note rather than a failure, so a feed outage does not block the daily publish.
+
+## Shot Charts: shot quality, difference map, career arc
+
+- **FG% vs. expected** (a fourth zone coloring): expected FG% is the league's conversion rate on the same kind of shot (zone, shot
+  type, catch-and-shoot or off the dribble), computed in the page from the season's shots; the KPI tile shows the player's FG% above
+  that expectation, which separates shot-making from shot selection.
+- **Difference map**: with a comparison on, "Comparison view" switches the second court to A minus B by zone for the metric in use.
+- **Career arc**: a sparkline under the player's name shows the MVP formula's score for every season with 20+ games (`shot.arc`,
+  computed by the build), best season filled, the season on screen ringed; clicking a dot shows that season.
+- On narrow screens the filter row is folded behind a "Filters and comparison" button; it opens itself when a filter or comparison is
+  active. Hovering a best-season checkbox prefetches that archived season.
+- The About scorecard is shaded by rank (warm for winners found, cool for misses), with a key under the table.
+- The season tracker on the Awards tab can plot each race as the model's predicted share of the vote day by day (a checkbox under
+  the chart) instead of rank; the snapshots carry the share as a third value where the award has a fitted temperature.
+- Most Improved was checked against its voting too: 11.4% of its real points fall outside the model's pool, spread across five
+  rules (previous Game Score of 16 or more 3.5%, previous season under half the games 2.9%, under 70% of games 2.5%, previous
+  season under 10 minutes 1.2%, under 24 minutes 1.1%). The biggest misses are established stars the cap excludes on purpose
+  (Gilgeous-Alexander 2022-23, Durant 2009-10, Curry 2015-16), so the rules were left alone.
+
+## Best-season checkboxes on the Shot Charts tab
+
+The build computes, for every player on file, the season the MVP formula rated highest (`best_seasons` in `nba_build.py`, embedded
+in the shot block as `best`). Each season is scored on its own, Game Score per game plus the team-record term with no blending, among
+the seasons where the player met the MVP ladder's minimums (70% of the team's games and 25 minutes a game); players who never met them
+get the best of their seasons with at least 20 games, flagged so the tooltip says so. The current season counts once teams have played
+20 games. "Show <name>'s Best Season" under the Season menu jumps to that season (loading it if archived) and follows the player while
+checked; the same checkbox under the second-player picker draws the comparison chart from that player's best season while the first
+chart keeps the selected season. `check_build.py` fails if the map is missing or points at a season the page does not have.
+
+## Known data quirks (from the November 2026 review)
+
+- Basketball-Reference's All-Rookie voting table omits rookies traded during the season (Derrick Favors 2010-11; Buddy Hield and Yogi
+  Ferrell 2016-17, both real selections), so `votes.json` is short those rows and the All-Rookie totals for 2010-11, 2014-15 and
+  2016-17 fall below the ballot arithmetic. Nothing on the page uses All-Rookie votes; `awards.json` is correct.
+- ESPN lists a handful of fringe players as active with 0:00 minutes. A game now counts as played only with minutes on the floor
+  (every games-played count in the build uses that rule).
+- Standings are built from the box scores, which always carry the final score; the play-by-play stops short of the final in many
+  early-season games (316 of them in 2002-03, 28 with the wrong winner) and lacks a few games altogether (Chicago at the Clippers,
+  2025-26). The play-by-play now only fills in a game the box scores do not have. Spot checks against the record books pass (Spurs
+  and Mavericks 60-22 in 2002-03, Pacers 61-21 in 2003-04, Warriors 73-9 in 2015-16). The cached season files carry
+  ARCHIVE_VERSION 9 for this, so a fresh build rebuilds them.
+- The two unscheduled games per team in November are the NBA Cup placeholders; the projections count them at the team's average chance.
 
 ## Good to know
 
@@ -201,10 +306,16 @@ nba_build.py          the whole build: downloads data, computes everything, writ
 template.html         the page itself (layout, styles and the scripts that draw everything)
 check_build.py        checks a built page before it is published
 check_models.py       runs the page's own award ladders in node and checks them against awards_models.py (needs node)
+smoke_test.js         loads a built page in jsdom and drives the new controls, failing on any runtime error (needs node and jsdom)
 awards_models.py      the award models in Python, for the scorecard and the season tracker
 refit_defmodel.py     refits the ballot model on vote shares and tests it season by season (--write updates static/defmodel.json)
-add_awards.py         adds a season's real awards to static/awards.json; add_votes.py adds a season's All-Defensive voting to static/votes.json
-static/               awards.json, roster.json, defmodel.json and votes.json (all read by the build or the refit)
+add_awards.py         adds a season's real awards to static/awards.json; add_votes.py adds a season's full award voting to static/votes.json
+refit_awards.py       scores every award model against its voting, fits the MVP/Sixth Man weights and vote-share temperatures (static/awardfit.json) and the recent-era ballot block
+fit_gamemodel.py      fits the win-chance model (blend, home court, rest, spread, availability) from the box scores (static/gamemodel.json)
+bootstrap.py          the seasons bootstrap and ADOPT/SMALL/NOISE verdict used by the three fitting scripts
+check_injuries.py     compares the logged injury reports with who actually dressed and measures the status weights (run after 60 days of logs)
+logs/injuries/        one JSON per day of ESPN's injury report, written by the build and committed by the workflow
+static/               awards.json, roster.json, defmodel.json, awardfit.json, gamemodel.json and votes.json (all read by the build or the refits)
 .github/workflows/    the daily GitHub Actions job
 requirements.txt      pandas, numpy, pyarrow
 ```
