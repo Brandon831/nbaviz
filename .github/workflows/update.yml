@@ -39,12 +39,23 @@ jobs:
       - name: Check the result before publishing it
         run: python check_build.py docs/index.html
       - name: Keep the day's injury report in the repository
-        # logs/injuries/<date>.json: check_injuries.py compares these with who actually dressed, to measure the status weights
+        # logs/injuries/<date>.json: check_injuries.py compares these with who actually dressed, to measure the status weights.
+        # Needs Settings > Actions > General > Workflow permissions set to "Read and write"; if the push is refused, the run still
+        # publishes the page and the log is kept as a downloadable artifact instead.
+        continue-on-error: true
         run: |
           if [ -n "$(git status --porcelain logs 2>/dev/null)" ]; then
             git config user.name "nba-dashboard bot"; git config user.email "actions@users.noreply.github.com"
-            git add logs && git commit -m "Injury report $(date -u +%F)" && git push
+            git add logs && git commit -m "Injury report $(date -u +%F)" && git push || echo "::warning::Could not push logs/injuries (check Settings > Actions > General > Workflow permissions: Read and write). The page was still built."
           fi
+      - name: Keep the injury log as an artifact too
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: injury-log
+          path: logs/injuries
+          if-no-files-found: ignore
+          retention-days: 90
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs
