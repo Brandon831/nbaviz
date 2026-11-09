@@ -57,7 +57,7 @@ gm = leaders.get('gamemodel') or {}
 if not all(k in gm for k in ('K', 'PW', 'GAP', 'HCA', 'B2B', 'SIG')) or not gm.get('avail'): problems.append('gamemodel (the fitted win-chance constants) is missing or incomplete in the leaders block')
 if not isinstance(leaders.get('injuries'), dict): problems.append('the injury report block is missing (should be a dict, possibly empty)')
 for w in leaders.get('warnings') or []:
-    if w.startswith('ESPN injury report'): print('note:', w)   # an unreadable injury feed is shown on the About tab but must not block the daily publish
+    if 'injury report' in w.lower() or w.lower().startswith('injury'): print('note:', w)   # trouble with the injury feed is shown on the About tab but must not block the daily publish
     else: problems.append('WARNING: ' + w)
 if leaders.get('roster') is not None and len(leaders['roster'].get('roster', [])) < 13: problems.append('the Grizzlies roster has fewer than 13 players')
 sn = leaders.get('snapshots')

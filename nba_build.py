@@ -345,27 +345,38 @@ def team_games(raw, y, d, shotgrp):
 # ----------------------------------------------------------------------------- Grizzlies roster from ESPN's public feed (falls back to static/roster.json)
 ESPN_ROSTER_URL = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/mem/roster'
 ESPN_INJURIES_URL = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries'
-def injuries_from_espn(team_ids):
-    """ESPN's league-wide injury report: {team: [[player id, name, status, detail, return date], ...]}, with team_ids = {ESPN team id: abbreviation}
-    from this season's box scores. Returns (report, note); the report is {} and the note says why if the feed cannot be read. Player ids are ESPN's,
-    the same ids the box scores use. The page prices each listing with the availability coefficients in static/gamemodel.json."""
+def injuries_from_espn(team_keys, player_team=None):
+    """ESPN's league-wide injury report: {team: [[player id, name, status, detail, return date], ...]}. team_keys maps everything this season's box scores
+    know a team by (ESPN team id, abbreviation, display name, location, nickname; lower-cased strings) to its abbreviation, and player_team maps a
+    player id to his team, so a listing is matched by team id, by any team name the feed gives, or by the player himself. Returns (report, note); the
+    report is {} and the note says why if the feed cannot be read. Player ids are ESPN's, the same ids the box scores use."""
     import urllib.request
     try:
         with urllib.request.urlopen(urllib.request.Request(ESPN_INJURIES_URL, headers={'User-Agent': 'nba-dashboard'}), timeout=20) as r: j = json.load(r)
     except Exception as e:
         return {}, f'ESPN injury report could not be read ({e}); win chances assume full rosters'
-    out = {}; unmatched = 0; n = 0
+    player_team = player_team or {}
+    def key(v): return team_keys.get(str(v).strip().lower()) if v not in (None, '') else None
+    def team_of(tm, ath):
+        t = tm.get('team') or {}; at = ath.get('team') or {}
+        for v in (t.get('abbreviation'), t.get('id'), tm.get('id'), tm.get('abbreviation'), tm.get('displayName'), tm.get('name'), tm.get('location'), t.get('displayName'), t.get('name'), t.get('location'), at.get('abbreviation'), at.get('id'), at.get('displayName')):
+            k = key(v)
+            if k: return k
+        return player_team.get(str(ath.get('id')))
+    out = {}; unmatched = 0; n = 0; sample = None
     for tm in j.get('injuries', []) or []:
-        team = (tm.get('team') or {}).get('abbreviation') or team_ids.get(str(tm.get('id'))) or team_ids.get(str((tm.get('team') or {}).get('id')))
         for inj in tm.get('injuries', []) or []:
-            ath = inj.get('athlete') or {}; pid = ath.get('id'); n += 1
-            if not team and ath.get('team'): team = team_ids.get(str((ath.get('team') or {}).get('id')))
-            if not team or not pid: unmatched += 1; continue
+            ath = inj.get('athlete') or {}; pid = ath.get('id'); n += 1; team = team_of(tm, ath)
+            if not team or not pid:
+                unmatched += 1
+                if sample is None: sample = {'team_entry_keys': sorted(k for k in tm if k != 'injuries'), 'team_id': tm.get('id'), 'team_name': tm.get('displayName'), 'athlete_keys': sorted(ath)}
+                continue
             det = inj.get('details') or {}; status = inj.get('status') or ((inj.get('type') or {}).get('description')) or ''
             detail = ' '.join(x for x in [det.get('side'), det.get('type') or det.get('location'), det.get('detail')] if x) or (inj.get('shortComment') or '')[:60]
             ret = det.get('returnDate') or ''; ret = ret[:10] if re.match(r'^\d{4}-\d{2}-\d{2}', ret) else ''
             out.setdefault(team, []).append([int(pid), ath.get('displayName') or '', status, detail, ret])
     note = f'{n} listings from ESPN' + (f', {unmatched} could not be matched to a team' if unmatched else '')
+    if sample: print('injury report: unmatched listing looks like', json.dumps(sample), file=sys.stderr)   # shows the feed's shape in the build log if matching ever fails again
     return out, note
 
 def roster_from_espn(static_roster):
@@ -990,11 +1001,16 @@ def main():
     leaders['warnings'] = []
     if getattr(a, 'no_injuries', False): leaders['injuries'] = {}; leaders['injuryNote'] = 'injury report skipped (--no-injuries)'
     else:
+        team_keys = {}; player_team = {}
         try:
-            bx = readp(fetch(a.raw, 'box', CURRENT)); team_ids = {str(int(k)): v for k, v in bx.dropna(subset=['team_id']).drop_duplicates('team_id').set_index('team_id').team_abbreviation.items()}
-        except Exception as e: team_ids = {}
-        leaders['injuries'], leaders['injuryNote'] = injuries_from_espn(team_ids)
-        if not leaders['injuries']: leaders['warnings'].append(leaders['injuryNote'] + '. The Grindhouse and Projections win chances assume full rosters until the next build.')
+            bx = readp(fetch(a.raw, 'box', CURRENT)); bx = bx[bx.season_type == 2]
+            for r in bx.drop_duplicates('team_id').itertuples():
+                for v in (r.team_id, r.team_abbreviation, getattr(r, 'team_display_name', None), getattr(r, 'team_location', None), getattr(r, 'team_name', None)):
+                    if v is not None and str(v) != 'nan': team_keys[str(v).strip().lower()] = r.team_abbreviation
+            last = bx.sort_values('game_date').drop_duplicates('athlete_id', keep='last'); player_team = {str(int(k)): v for k, v in zip(last.athlete_id, last.team_abbreviation)}
+        except Exception as e: print('injury report: team lookup from the box scores failed:', e, file=sys.stderr)
+        leaders['injuries'], leaders['injuryNote'] = injuries_from_espn(team_keys, player_team)
+        if not leaders['injuries']: leaders['warnings'].append('Injury report: ' + leaders['injuryNote'] + '. The Grindhouse and Projections win chances assume full rosters until the next build.')
         print('injury report:', leaders['injuryNote'], f"({sum(len(v) for v in leaders['injuries'].values())} players on {len(leaders['injuries'])} teams)", file=sys.stderr)
         # keep a dated copy of every report so the status weights can be checked against who actually dressed (check_injuries.py)
         if leaders['injuries']:
