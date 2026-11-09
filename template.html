@@ -1519,10 +1519,10 @@ function filterText(f){
   if (f.last > 0) bits.push('last ' + f.last + ' games');
   return bits;
 }
-var ARC = D.arc || {};
+var CAREER = D.arc || {};   /* career arcs by player id (not ARC, the three-point radius used by the court drawing) */
 /* the career arc: the MVP formula's score for every season with 20 or more games, best season filled, the season on screen ringed; click a dot to show that season */
 function renderArc(pid){
-  var box = document.getElementById('arc'), rows = pid == null ? null : ARC[String(pid)];
+  var box = document.getElementById('arc'), rows = pid == null ? null : CAREER[String(pid)];
   if (!rows || rows.length < 2){ box.innerHTML = ''; return; }
   var b = bestOf(pid), bestK = b ? +b.key : null, cur = S.season === 'all' ? null : +S.season;
   var W = 460, H = 64, padL = 8, padR = 8, top = 10, bot = 18, n = rows.length;
