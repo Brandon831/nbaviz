@@ -401,6 +401,7 @@ canvas:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-ra
 .gm-tag.cup{color:var(--aw-fg);background:linear-gradient(135deg,var(--aw-g1),var(--aw-g2));border-color:var(--aw-bd)}
 .gm-top,.gm-time{grid-column:1 / -1;font-size:13px;color:var(--muted)}
 .gm-top b{color:var(--ink)}
+.gm-top .gm-sub{color:var(--muted);font-weight:400}
 .gm-time{font-weight:600;color:var(--ink)}
 .tmgrid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:16px;margin-bottom:0;align-items:start}
 .stbl{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
@@ -779,29 +780,12 @@ th[aria-sort=ascending]::after{content:" \25B2";font-size:.75em;color:var(--mute
             <label><input type="radio" name="lmode" value="tot"><span>Season totals</span></label>
           </div>
         </fieldset>
-        <button type="button" class="linkbtn" id="toRoster">Jump to Grizzlies roster</button>
       </div>
     </div>
     <div class="banner" id="sb-l" hidden></div>
     <div class="lgrid" id="lgrid"></div>
     <div class="lnote" id="lnote"></div>
 
-    <section class="card rostercard" id="roster" aria-labelledby="rost-h">
-      <div class="rhead">
-        <h2 id="rost-h">Memphis Grizzlies roster</h2>
-        <p id="rostmeta"></p>
-      </div>
-      <div class="scroll">
-        <table id="rtable">
-          <thead><tr>
-            <th scope="col">#</th><th scope="col" class="l">Player</th><th scope="col" class="l">Pos</th><th scope="col" class="num">Ht</th><th scope="col" class="num">Wt</th><th scope="col" class="num">Age</th><th scope="col" class="num">Exp</th><th scope="col" class="l">College</th>
-            <th scope="col" class="num">GP</th><th scope="col" class="num">MPG</th><th scope="col" class="num">PPG</th><th scope="col" class="num">RPG</th><th scope="col" class="num">APG</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <p class="rnote" id="rnote"></p>
-    </section>
   </div>
   <div id="view-awards" role="tabpanel" aria-labelledby="tab-awards" hidden>
     <h1>Awards Watch</h1>
@@ -2642,47 +2626,6 @@ window.NBA_LEADERS.award = {mvp:mvpFor, dpoy:dpoyFor, roy:royFor, smoy:smoyFor, 
 window.NBA_LEADERS.mvp = mvpFor; window.NBA_LEADERS.mip = mipFor;
 
 
-/* ---------- Grizzlies roster ---------- */
-function ageOn(bd){
-  var b = new Date(bd+'T12:00:00'), n = new Date(), a = n.getFullYear()-b.getFullYear();
-  if (n.getMonth() < b.getMonth() || (n.getMonth()===b.getMonth() && n.getDate() < b.getDate())) a--;
-  return a;
-}
-var FULL = {ATL:'Atlanta Hawks',BKN:'Brooklyn Nets',BOS:'Boston Celtics',CHA:'Charlotte Hornets',CHI:'Chicago Bulls',CLE:'Cleveland Cavaliers',DAL:'Dallas Mavericks',DEN:'Denver Nuggets',DET:'Detroit Pistons',GS:'Golden State Warriors',HOU:'Houston Rockets',IND:'Indiana Pacers',LAC:'LA Clippers',LAL:'Los Angeles Lakers',MEM:'Memphis Grizzlies',MIA:'Miami Heat',MIL:'Milwaukee Bucks',MIN:'Minnesota Timberwolves',NO:'New Orleans Pelicans',NY:'New York Knicks',OKC:'Oklahoma City Thunder',ORL:'Orlando Magic',PHI:'Philadelphia 76ers',PHX:'Phoenix Suns',POR:'Portland Trail Blazers',SA:'San Antonio Spurs',SAC:'Sacramento Kings',TOR:'Toronto Raptors',UTAH:'Utah Jazz',WSH:'Washington Wizards'};
-function renderRoster(){
-  var FAV = window.NBA_FAV, M = L.mem, rows = '';
-  document.getElementById('rost-h').textContent = (FULL[FAV] || FAV)+' roster'; var jb = document.getElementById('toRoster'); if (jb) jb.textContent = 'Jump to '+(FULL[FAV] ? FULL[FAV].split(' ').slice(-1)[0] : FAV)+' roster';
-  if (FAV !== 'MEM'){
-    /* another favorite: the roster is everyone who has played for the team this season, from the box scores (size, age and contract status are only on file for Memphis) */
-    var st = (window.NBA_STANDINGS[CUR] || {})[FAV] || {w:0, l:0}, pos = L.pos || {};
-    document.getElementById('rostmeta').textContent = st.w+'-'+st.l+' \u00B7 players who have appeared this season, from the box scores \u00B7 stats through '+fmtDate(L.asof);
-    var pl = L.players.filter(function(a){ return a[2] === FAV && a[3] > 0; }).sort(function(a, b){ return b[4] - a[4]; });
-    document.querySelector('#rtable tbody').innerHTML = '<tr class="grp"><td colspan="13">Played this season ('+pl.length+')</td></tr>'+pl.map(function(a){
-      var gp = a[3]; return '<tr><td>\u2013</td><td class="pn"><span data-pid="'+a[0]+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(a[1])+'</span></td><td class="l">'+(pos[String(a[0])] || '\u2013')+'</td><td class="num">\u2013</td><td class="num">\u2013</td><td class="num">\u2013</td><td class="num">\u2013</td><td class="l">\u2013</td>'+
-        '<td class="num">'+gp+'</td><td class="num">'+(a[4]/gp).toFixed(1)+'</td><td class="num">'+(a[5]/gp).toFixed(1)+'</td><td class="num">'+(a[14]/gp).toFixed(1)+'</td><td class="num">'+(a[15]/gp).toFixed(1)+'</td></tr>'; }).join('');
-    document.getElementById('rnote').textContent = 'Jersey numbers, size, age, experience and college are kept only for the Grizzlies. Pick Memphis as the favorite team on The Grindhouse tab to see the full roster card.';
-    return;
-  }
-  document.getElementById('rostmeta').textContent = M.record[0]+'-'+M.record[1]+' \u00B7 Head coach '+M.coach+' \u00B7 Roster as of '+fmtDate(M.rosterAsOf)+', stats through '+fmtDate(L.asof);
-  function line(r){
-    var s = r.pid ? BYID[r.pid] : null, gp = s ? s.gp : 0;
-    var col = r.col.length ? r.col[r.col.length-1] : '\u2013';
-    var cells = '<td>'+r.n+'</td><td class="pn">'+(r.pid ? '<span data-pid="'+r.pid+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(r.name)+'</span>' : esc(r.name))+(r.tw?'<span class="tw" title="Two-way contract">TW</span>':'')+'</td><td class="l">'+r.pos+'</td>'+
-      '<td class="num">'+r.ht.replace('-','\u2019')+'\u201D</td><td class="num">'+r.wt+'</td><td class="num">'+ageOn(r.bd)+'</td><td class="num">'+r.exp+'</td>'+
-      '<td class="l" title="'+esc(r.col.join(', '))+'">'+esc(col)+'</td>';
-    if (gp){
-      cells += '<td class="num">'+gp+'</td><td class="num">'+(s.min/gp).toFixed(1)+'</td><td class="num">'+(s.pts/gp).toFixed(1)+'</td><td class="num">'+(s.reb/gp).toFixed(1)+'</td><td class="num">'+(s.ast/gp).toFixed(1)+'</td>';
-    } else cells += '<td class="num">0</td><td class="num">\u2013</td><td class="num">\u2013</td><td class="num">\u2013</td><td class="num">\u2013</td>';
-    return '<tr'+(gp?'':' class="zero"')+'>'+cells+'</tr>';
-  }
-  function grp(label, list){ return '<tr class="grp"><td colspan="13">'+label+' ('+list.length+')</td></tr>'+list.map(line).join(''); }
-  var std = M.roster.filter(function(r){ return !r.tw; }).sort(function(a,b){ return a.n-b.n; });
-  var tw = M.roster.filter(function(r){ return r.tw; }).sort(function(a,b){ return a.n-b.n; });
-  rows = grp('Standard contracts', std) + grp('Two-way contracts', tw);
-  document.querySelector('#rtable tbody').innerHTML = rows;
-  document.getElementById('rnote').textContent = 'Roster, positions, size and birth dates from Basketball-Reference; jersey numbers checked against ESPN box scores. TW = two-way contract. Players waived before the opener, such as Walter Clayton Jr. and Micah Peavy, are not listed. Stats are regular season only.';
-}
-
 /* ---------- views and tabs ---------- */
 var VIEWS = ['shots','leaders','awards','teams','stats','players','outlook','hub','about'];
 function show(view, scrollTo){
@@ -2704,7 +2647,6 @@ Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function
     }
   });
 });
-document.getElementById('toRoster').addEventListener('click', function(){ document.getElementById('roster').scrollIntoView({behavior:'smooth', block:'start'}); });
 Array.prototype.forEach.call(document.querySelectorAll('input[name=lmode]'), function(el){
   el.addEventListener('change', function(){ if (el.checked){ mode = el.value; render(); } });
 });
@@ -2713,7 +2655,7 @@ var TM_IDS = ['scores','standings'];
 function fromHash(){
   var h = (location.hash||'').replace('#','').split('~')[0];
   if (h === 'leaders') show('leaders');
-  else if (h === 'grizzlies' || h === 'roster') show('leaders','roster');
+  else if (h === 'grizzlies' || h === 'roster') show('leaders');   /* the roster section was retired; old links land on the leaderboards */
   else if (h === 'awards') show('awards');
   else if (AW_IDS.indexOf(h) >= 0) show('awards', h);
   else if (h === 'teams') show('teams');
@@ -2730,7 +2672,7 @@ function fromHash(){
 }
 window.addEventListener('hashchange', fromHash);
 window.NBA_NAV = {show: show};
-renderMeta(); render(); buildAwards(); renderAwards(); renderRoster(); renderBanners(); fromHash();
+renderMeta(); render(); buildAwards(); renderAwards(); renderBanners(); fromHash();
 })();
 </script>
 <script>
@@ -2787,10 +2729,19 @@ function gameHtml(r){
   if (window.NBA_MODEL){ var b2b = function(t){ return window.NBA_MODEL.restDays(t, r[0]) === 0 ? ' <abbr class="b2b" title="Back-to-back: second game in two days">(B2B)</abbr>' : ''; }, an = '<span class="tm"><i class="tdot" style="background:'+tcol(away)+'"></i>'+NAMES[away]+b2b(away)+'</span>', hn = '<span class="tm"><i class="tdot" style="background:'+tcol(home)+'"></i>'+NAMES[home]+b2b(home)+'</span>';
     score = done ? '<span class="gm-t'+(awin?' win':'')+'">'+an+'<b>'+aw+'</b></span><span class="gm-t'+(hwin?' win':'')+'">'+hn+'<b>'+hs+'</b></span>' : '<span class="gm-t up">'+an+' at '+hn+'</span>'; }
   var click = done && r[13] && window.NBA_GAMES && window.NBA_GAMES.has(r[13]);
-  var right = done
-    ? (r[9] ? '<span class="gm-top">Top scorer <span data-pid="'+r[12]+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(r[9])+'</span> ('+esc(r[10])+') <b>'+r[11]+'</b></span>' : '')
-    : '<span class="gm-time">'+esc(r[1])+'</span>';
+  var right = done ? topPlayerHtml(r) : '<span class="gm-time">'+esc(r[1])+'</span>';
   return '<li class="game'+(done ? ' done' : '')+'"'+(click ? ' data-gid="'+r[13]+'" tabindex="0" role="button" title="Open the box score, score flow and shot maps"' : '')+(wcol ? ' style="--wc:'+wcol+'"' : '')+'><div class="gm-score">'+score+'</div>'+tags+right+(click ? '<span class="gm-more">Box score \u203A</span>' : '')+'</li>';
+}
+/* the game's best performer by Game Score, with the stat line; Game Score itself and the full line are in the tooltip */
+function topPlayerHtml(r){
+  var b = r[14];
+  if (!b) return r[9] ? '<span class="gm-top">Top scorer <span data-pid="'+r[12]+'" role="link" tabindex="0" title="Open this player\u2019s shot chart">'+esc(r[9])+'</span> ('+esc(r[10])+') <b>'+r[11]+'</b></span>' : '';
+  var pid = b[0], name = b[1], team = b[2], gs = b[3], pts = b[4], reb = b[5], ast = b[6], stl = b[7], blk = b[8], fgm = b[9], fga = b[10], tpm = b[11], tpa = b[12], ftm = b[13], fta = b[14], min = b[15], tov = b[16];
+  var parts = ['<b>'+pts+'</b> pts', '<b>'+reb+'</b> reb', '<b>'+ast+'</b> ast'];
+  if (stl >= 2) parts.push('<b>'+stl+'</b> stl'); if (blk >= 2) parts.push('<b>'+blk+'</b> blk');
+  var shoot = fgm+'-'+fga+' FG'+(tpm >= 3 ? ', '+tpm+'-'+tpa+' 3PT' : '')+(fta >= 8 ? ', '+ftm+'-'+fta+' FT' : '');
+  var title = 'Game Score '+gs.toFixed(1)+' in '+min+' min \u00B7 '+fgm+'-'+fga+' FG, '+tpm+'-'+tpa+' 3PT, '+ftm+'-'+fta+' FT \u00B7 '+stl+' stl, '+blk+' blk, '+tov+' TO. Game Score is Hollinger\u2019s box-score composite; the award ladders use the same measure.';
+  return '<span class="gm-top" title="'+esc(title)+'">Top player <span data-pid="'+pid+'" role="link" tabindex="0" title="'+esc(title)+' Open this player\u2019s shot chart.">'+esc(name)+'</span> ('+esc(team)+') '+parts.join(' \u00B7 ')+' <span class="gm-sub">'+shoot+'</span></span>';
 }
 function setDate(d, fromInput){
   curDate = d;
@@ -4427,7 +4378,7 @@ function init(){
       (L.injuryLogNote ? '<p class="warn"><b>Reminder.</b> '+esc(L.injuryLogNote)+'</p>' : (L.injuryLogDays ? '<p class="smn">The daily build has logged the injury report for '+L.injuryLogDays+' day'+(L.injuryLogDays === 1 ? '' : 's')+'; after 60 it will ask you to check the report against who actually dressed.</p>' : ''))+
       (stale ? '<p class="warn">That is more than two days ago. If this is your own site, check that the daily update is running (the Actions tab of the repository).</p>' : '')+
       '<p class="smn">New games appear once the data source has published them, usually overnight or the next morning, and the daily update picks them up.</p></section>'+
-    '<section class="card aboutsec"><h2>What is here</h2><dl class="about"><dt>Shot Charts</dt><dd>Every tracked shot since 2002-03 by zone (seasons before 2022-23 load when picked), with filters, comparisons, a difference map, shot quality against expectation, career arcs and shot-profile twins.</dd><dt>League Leaders</dt><dd>Fourteen leaderboards and the Grizzlies roster.</dd><dt>Awards Watch</dt><dd>Top-5 candidates for six awards, shown as predicted shares of the vote, and projected All-NBA, All-Defensive and All-Rookie teams, from stat models calibrated on the real voting since 2003-04, plus a day-by-day tracker of each race this season.</dd><dt>League Scoreboard</dt><dd>Every game day\u2019s scores with full box scores, score flow and shot maps, plus the standings.</dd><dt>Team Stats</dt><dd>Any two of 42 team statistics against each other, lineups and pairs, and defense shot charts.</dd><dt>Player Stats</dt><dd>Any two of about 40 player statistics against each other, including on/off ratings.</dd><dt>Projections</dt><dd>Projected wins and playoff odds, and how hard each team\u2019s schedule ahead is.</dd><dt>'+esc(window.NBA_ARENA_NAME || 'The Grindhouse')+'</dt><dd>Your favorite team\u2019s home, named after its arena: standing, next game, matchup preview, results, rotation, lineups and season trend.</dd></dl></section>'+
+    '<section class="card aboutsec"><h2>What is here</h2><dl class="about"><dt>Shot Charts</dt><dd>Every tracked shot since 2002-03 by zone (seasons before 2022-23 load when picked), with filters, comparisons, a difference map, shot quality against expectation, career arcs and shot-profile twins.</dd><dt>League Leaders</dt><dd>Fourteen leaderboards, per game or season totals.</dd><dt>Awards Watch</dt><dd>Top-5 candidates for six awards, shown as predicted shares of the vote, and projected All-NBA, All-Defensive and All-Rookie teams, from stat models calibrated on the real voting since 2003-04, plus a day-by-day tracker of each race this season.</dd><dt>League Scoreboard</dt><dd>Every game day\u2019s scores with full box scores, score flow and shot maps, plus the standings.</dd><dt>Team Stats</dt><dd>Any two of 42 team statistics against each other, lineups and pairs, and defense shot charts.</dd><dt>Player Stats</dt><dd>Any two of about 40 player statistics against each other, including on/off ratings.</dd><dt>Projections</dt><dd>Projected wins and playoff odds, and how hard each team\u2019s schedule ahead is.</dd><dt>'+esc(window.NBA_ARENA_NAME || 'The Grindhouse')+'</dt><dd>Your favorite team\u2019s home, named after its arena: standing, next game, matchup preview, results, rotation, lineups and season trend.</dd></dl></section>'+
     '<section class="card aboutsec"><h2>How well the models reproduce history</h2><div id="ab-score"></div></section>'+
     (L.backtest && L.backtest.length ? '<section class="card aboutsec" id="ab-hist"><h2>The same models on every season since 2002-03</h2><p class="smn">The Rookie ladder, the All-NBA rule and the Clutch formula were set while looking at 2022-23 to 2025-26, so the seasons before that are a true out-of-sample test for them. The defensive ballot weights, the MVP and Sixth Man team-success weights and the Most Improved rules were fitted on the real voting and awards of all of these seasons, each held out in turn when tested. Each cell is where the real winner ranked (lower is better); the team columns are how many of the real selections the model\u2019s picks included.</p><div id="ab-hist-body"></div></section>' : '')+
     '<section class="card aboutsec"><h2>Things to keep in mind</h2><ul class="about"><li>Everything comes from ESPN play-by-play and box scores, republished by sportsdataverse. Shot locations are ESPN\u2019s, so totals will not match NBA.com exactly.</li><li>Shots farther than 40 feet, free throws, All-Star games and the NBA Cup final are left out of the shot totals.</li><li>The stand-ins for tracking data (catch-and-shoot style versus off the dribble) read ESPN\u2019s shot descriptions; they work best on threes. Screens, pick-and-roll and defender distance are not in this data at all.</li><li>On/off ratings and lineups are rebuilt from substitution records and used only for games where every player\u2019s rebuilt minutes agree with the box score (about 97% of games). They are noisy, especially early in a season.</li><li>Ratings are per 100 possessions with possessions estimated from the box score, so they will not match NBA.com to the decimal.</li><li>The projections ignore injuries, trades and tiebreaker rules, and the schedule data is missing the last two games per team.</li><li>Early in a season every list is a small sample and will keep reshuffling.</li>'+(window.NBA_ARCHIVE && window.NBA_ARCHIVE.keys().length ? '<li>Seasons before the last five are kept in separate files and load when you pick them (about 1 to 2 MB each) on the Shot Charts, Team Stats, Player Stats and defense-chart season menus. The Awards Watch, League Scoreboard, Projections and Grindhouse tabs cover the last five seasons only. Before 2017-18 ESPN\u2019s substitution records are too thin to rebuild lineups, so those seasons have no on/off or lineup figures; each season menu says so. Old franchises appear under today\u2019s codes (Seattle as OKC, New Jersey as BKN).</li>' : '')+'</ul></section>';

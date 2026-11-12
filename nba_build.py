@@ -830,8 +830,14 @@ def games_table(raw, y, horizon_days=14):
     sch = sch[sch.season_type == 2].copy() if 'season_type' in sch.columns else sch.copy()
     sch['start'] = pd.to_datetime(sch['start_date'], utc=True); sch['et'] = sch.start.dt.tz_convert('America/New_York')
     sch['edate'] = sch.et.dt.strftime('%Y-%m-%d'); sch['etime'] = sch.et.dt.strftime('%-I:%M %p ET')
-    box = readp(fetch(raw, 'box', y)); box = box[(box.did_not_play == False) & (box.minutes > 0)]
+    box = readp(fetch(raw, 'box', y)); box = box[(box.did_not_play == False) & (box.minutes > 0)].copy()
     top = box.sort_values(['points', 'minutes'], ascending=[False, True]).drop_duplicates('game_id').set_index('game_id')
+    # the game's best performer by Game Score (Hollinger's box-score composite, the same measure the award ladders use), with the full line
+    box['gs'] = game_score_total(box)
+    best = box.sort_values(['gs', 'points', 'minutes'], ascending=[False, False, True]).drop_duplicates('game_id').set_index('game_id')
+    def line(b):
+        return [int(b.athlete_id), b.athlete_display_name, b.team_abbreviation, round(float(b.gs), 1), int(b.points), int(b.rebounds), int(b.assists), int(b.steals), int(b.blocks),
+                int(b.field_goals_made), int(b.field_goals_attempted), int(b.three_point_field_goals_made), int(b.three_point_field_goals_attempted), int(b.free_throws_made), int(b.free_throws_attempted), int(round(float(b.minutes))), int(b.turnovers)]
     done = sch[sch.status_type_completed == True]
     last = done.edate.max() if len(done) else None
     horizon = (pd.Timestamp(last) + pd.Timedelta(days=horizon_days)).strftime('%Y-%m-%d') if last else None
@@ -841,11 +847,11 @@ def games_table(raw, y, horizon_days=14):
         # completed games, plus the upcoming days; older unplayed rows (postponements) are left out
         if not comp and not (last and last < r.edate <= horizon): continue
         if r.home_abbreviation not in STD or r.away_abbreviation not in STD: continue
-        t = top.loc[int(r.id)] if comp and int(r.id) in top.index else None
+        t = top.loc[int(r.id)] if comp and int(r.id) in top.index else None; b = best.loc[int(r.id)] if comp and int(r.id) in best.index else None
         rows.append([r.edate, r.etime, r.away_abbreviation, r.home_abbreviation, 1 if comp else 0, int(r.away_score) if comp else None, int(r.home_score) if comp else None,
                      1 if (comp and int(r.status_period) > 4) else 0, 1 if 'Cup Championship' in str(r.notes_headline or '') else 0,
                      (t.athlete_display_name if t is not None else None), (t.team_abbreviation if t is not None else None), (int(t.points) if t is not None else None),
-                     int(t.athlete_id) if t is not None else None, int(r.id)])
+                     int(t.athlete_id) if t is not None else None, int(r.id), line(b) if b is not None else None])   # [14]: top player by Game Score with the stat line
     return rows
 
 # ----------------------------------------------------------------------------- assemble the data blocks and the page

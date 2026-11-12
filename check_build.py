@@ -33,7 +33,10 @@ for k, t in tg.items():
     want = leaders['games'] if k == leaders['key'] else 1230
     if n != want: problems.append(f'{k}: {n} team-game rows instead of {want}')
 if not leaders.get('sched'): problems.append('no scores or schedule')
-if leaders.get('sched') and any(len(r) != 14 for r in leaders['sched']): problems.append('scores table rows have the wrong shape (nba_build.py and template.html are out of step)')
+if leaders.get('sched') and any(len(r) != 15 for r in leaders['sched']): problems.append('scores table rows have the wrong shape (nba_build.py and template.html are out of step)')
+if leaders.get('sched'):
+    done = [r for r in leaders['sched'] if r[4] == 1]; notop = [r for r in done if not (isinstance(r[14], list) and len(r[14]) == 17)]
+    if notop: problems.append(f'{len(notop)} completed games have no top player line (e.g. {notop[0][:4]})')
 lc = leaders.get('lcov', {})
 if sorted(lc) != sorted(seasons): problems.append('lineup data is missing for some seasons')
 for k, (done, total) in lc.items():

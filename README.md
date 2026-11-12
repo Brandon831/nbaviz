@@ -247,6 +247,9 @@ Grindhouse next-game panel itemizes the margin. If the feed cannot be read the p
 - On narrow screens the filter row is folded behind a "Filters and comparison" button; it opens itself when a filter or comparison is
   active. Hovering a best-season checkbox prefetches that archived season.
 - The About scorecard is shaded by rank (warm for winners found, cool for misses), with a key under the table.
+- Each completed game on the League Scoreboard names one top player, the best performer by Game Score, with the stat line (points,
+  rebounds, assists, steals and blocks when notable, shooting); hovering shows the Game Score, minutes and the complete line. The
+  Grizzlies roster table was removed from the League Leaders page (the roster file still feeds the Grindhouse).
 - The season tracker on the Awards tab can plot each race as the model's predicted share of the vote day by day (a checkbox under
   the chart) instead of rank; the snapshots carry the share as a third value where the award has a fitted temperature.
 - Most Improved was checked against its voting too: 11.4% of its real points fall outside the model's pool, spread across five
@@ -307,6 +310,7 @@ template.html         the page itself (layout, styles and the scripts that draw 
 check_build.py        checks a built page before it is published
 check_models.py       runs the page's own award ladders in node and checks them against awards_models.py (needs node)
 smoke_test.js         loads a built page in jsdom and drives the new controls, failing on any runtime error (needs node and jsdom)
+render_test.js        draws the shot chart with a real canvas and fails if any path command carries NaN (needs node, jsdom and @napi-rs/canvas)
 awards_models.py      the award models in Python, for the scorecard and the season tracker
 refit_defmodel.py     refits the ballot model on vote shares and tests it season by season (--write updates static/defmodel.json)
 add_awards.py         adds a season's real awards to static/awards.json; add_votes.py adds a season's full award voting to static/votes.json
