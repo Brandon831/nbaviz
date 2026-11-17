@@ -2775,21 +2775,31 @@ function initScores(){
 
 /* ---------- standings and ratings ---------- */
 function ratingFor(t){ var r = (L.teams || {})[CUR]; return r && r[t] ? {d:r[t][0], o:r[t][1], net:r[t][1]-r[t][0]} : null; }
+/* home and away records from the completed games on the scoreboard (the NBA Cup final is not a regular-season game) */
+function homeAway(){
+  var sp = {}; TEAMS.forEach(function(t){ sp[t] = {hw:0, hl:0, aw:0, al:0}; });
+  ROWS.forEach(function(r){
+    if (r[4] !== 1 || r[8] || !sp[r[2]] || !sp[r[3]]) return;
+    var hwin = r[6] > r[5];
+    if (hwin){ sp[r[3]].hw++; sp[r[2]].al++; } else { sp[r[3]].hl++; sp[r[2]].aw++; }
+  });
+  return sp;
+}
 function renderStandings(){
-  var st = window.NBA_STANDINGS[CUR] || {}, body = '';
+  var st = window.NBA_STANDINGS[CUR] || {}, body = '', sp = homeAway();
   ['East','West'].forEach(function(conf){
     var rows = TEAMS.filter(function(t){ return st[t] && st[t].conf === conf; }).map(function(t){
       var s = st[t], g = s.w + s.l, rt = ratingFor(t);
-      return {t:t, w:s.w, l:s.l, pct:g ? s.w/g : -1, net:rt ? rt.net : -99, o:rt ? rt.o : null, d:rt ? rt.d : null, div:s.div, lead:s.d1, cl:s.c1};
+      return {t:t, w:s.w, l:s.l, pct:g ? s.w/g : -1, net:rt ? rt.net : -99, o:rt ? rt.o : null, d:rt ? rt.d : null, div:s.div, lead:s.d1, cl:s.c1, sp:sp[t]};
     }).sort(function(a,b){ return (b.pct - a.pct) || (b.w - a.w) || (b.net - a.net); });
-    body += '<div class="stcol"><h3>'+conf+'ern Conference</h3><div class="scroll"><table class="stbl"><thead><tr><th scope="col">#</th><th scope="col" class="l">Team</th><th scope="col">W-L</th><th scope="col">PCT</th><th scope="col">Off</th><th scope="col">Def</th><th scope="col">Net</th></tr></thead><tbody>';
+    body += '<div class="stcol"><h3>'+conf+'ern Conference</h3><div class="scroll"><table class="stbl"><thead><tr><th scope="col">#</th><th scope="col" class="l">Team</th><th scope="col">W-L</th><th scope="col">PCT</th><th scope="col" title="Record at home">Home</th><th scope="col" title="Record on the road">Away</th><th scope="col">Off</th><th scope="col">Def</th><th scope="col">Net</th></tr></thead><tbody>';
     rows.forEach(function(r, i){
-      body += '<tr data-team="'+r.t+'"'+(r.t === window.NBA_FAV ? ' class="mem"' : '')+'><td>'+(i+1)+'</td><td class="l"><span class="tmn" role="link" tabindex="0" data-team="'+r.t+'" title="See where opponents shoot against this team">'+NAMES[r.t]+'</span>'+(r.lead ? ' <span class="dlead" title="Leads the '+r.div+' Division">'+(r.cl ? '\u2605' : '\u25CF')+'</span>' : '')+'</td><td>'+r.w+'-'+r.l+'</td><td>'+(r.pct >= 0 ? r.pct.toFixed(3).replace(/^0/, '') : '\u2013')+'</td><td>'+(r.o != null ? r.o.toFixed(1) : '\u2013')+'</td><td>'+(r.d != null ? r.d.toFixed(1) : '\u2013')+'</td><td>'+(r.o != null ? (r.net >= 0 ? '+' : '\u2212')+Math.abs(r.net).toFixed(1) : '\u2013')+'</td></tr>';
+      body += '<tr data-team="'+r.t+'"'+(r.t === window.NBA_FAV ? ' class="mem"' : '')+'><td>'+(i+1)+'</td><td class="l"><span class="tmn" role="link" tabindex="0" data-team="'+r.t+'" title="See where opponents shoot against this team">'+NAMES[r.t]+'</span>'+(r.lead ? ' <span class="dlead" title="Leads the '+r.div+' Division">'+(r.cl ? '\u2605' : '\u25CF')+'</span>' : '')+'</td><td>'+r.w+'-'+r.l+'</td><td>'+(r.pct >= 0 ? r.pct.toFixed(3).replace(/^0/, '') : '\u2013')+'</td><td>'+r.sp.hw+'-'+r.sp.hl+'</td><td>'+r.sp.aw+'-'+r.sp.al+'</td><td>'+(r.o != null ? r.o.toFixed(1) : '\u2013')+'</td><td>'+(r.d != null ? r.d.toFixed(1) : '\u2013')+'</td><td>'+(r.o != null ? (r.net >= 0 ? '+' : '\u2212')+Math.abs(r.net).toFixed(1) : '\u2013')+'</td></tr>';
     });
     body += '</tbody></table></div></div>';
   });
   el('stand-body').innerHTML = body;
-  el('stand-sub').textContent = 'Through '+fmtDay(L.asof, false)+', ranked by winning percentage with no tiebreakers. Off and Def are points per 100 possessions. \u25CF leads its division, \u2605 leads its conference.';
+  el('stand-sub').textContent = 'Through '+fmtDay(L.asof, false)+', ranked by winning percentage with no tiebreakers. Home and Away are the records in those games. Off and Def are points per 100 possessions. \u25CF leads its division, \u2605 leads its conference.';
 }
 function init(){
   el('tmlede').textContent = 'Scores from every game day and the standings. Click a team in the standings to see where opponents shoot against it. To plot any two team statistics against each other, or see every team\u2019s defense shot chart, use the Team Stats tab. Data through '+fmtDay(L.asof, true)+' ('+L.games+' games).';
