@@ -271,9 +271,10 @@ chart keeps the selected season. `check_build.py` fails if the map is missing or
 
 ## The look (November 2026 redesign)
 
-One idea carries the page: an arena at night. A full-width midnight-navy masthead holds the name in Big Shoulders Display with the half
-court the charts use drawn faintly behind it (the SVG in `template.html` is generated from the same geometry: hoop at 5.25 ft, arc
-23.75 ft, corners at 22 ft), and the tabs sit in that band with the active one underlined in Grizzlies gold. Below it the surfaces are a
+One idea carries the page: an arena at night. A full-width midnight-navy masthead holds the name in Big Shoulders Display with the court
+in the shot charts' own framing (baseline to just past the three-point apex) drawn in thin lines on the right (the SVG in
+`template.html` is generated from the chart geometry: hoop at 5.25 ft, arc 23.75 ft, corners at 22 ft; the arc path uses the short
+way over the top, large-arc flag 0), and the tabs sit in that band with the active one underlined in Grizzlies gold. Below it the surfaces are a
 cool arena light (not cream), panels are flat with a tight 4 px radius, tables use hairlines and tabular figures, and gold appears only
 where it means something: the active tab, the favorite team's rows, and first place. Dark mode is deep navy with a brighter gold.
 Type: Big Shoulders Display for headlines and every large number, Source Sans 3 for everything read.
@@ -284,7 +285,11 @@ accent (active tab, favorite rows, first place). Black is never a base when the 
 too close to the base is replaced by a tint of the base; a few teams use their official third color (Grizzlies gold, Celtics gold,
 Heat yellow, Magic silver) or a chosen neutral; the accent is lifted until it reads at 3:1 against the masthead, and all 30 teams pass
 in both modes. The shot-chart pair (cold blue, hot ember) and the league-award gold stay fixed so the charts and the awards mean the
-same thing whatever the team. Memphis comes out as the navy-and-gold design described above. Removed: gradients, shine, drop
+same thing whatever the team. Memphis comes out as the navy-and-gold design described above.
+
+**A photo in the masthead for a team.** Drop a cutout (transparent background) into `static/` as `mast_photo_<TEAM>.webp` (or .png,
+.jpg) and the build inlines it; when that team is the favorite, the masthead shows the photo in place of the court drawing, anchored
+to the band's bottom edge on the right, with room reserved so the tabs never sit under it (hidden below 860 px). Golden State has one. Removed: gradients, shine, drop
 shadows, hover lifts, uppercase tracked labels, pill radii. The shot-chart palette (cold blue, hot ember, teal for shot share) is read
 from the same CSS tokens, so the canvases follow the theme.
 
@@ -340,7 +345,7 @@ fit_gamemodel.py      fits the win-chance model (blend, home court, rest, spread
 bootstrap.py          the seasons bootstrap and ADOPT/SMALL/NOISE verdict used by the three fitting scripts
 check_injuries.py     compares the logged injury reports with who actually dressed and measures the status weights (run after 60 days of logs)
 logs/injuries/        one JSON per day of ESPN's injury report, written by the build and committed by the workflow
-static/               awards.json, roster.json, defmodel.json, awardfit.json, gamemodel.json and votes.json (all read by the build or the refits)
+static/               awards.json, roster.json, defmodel.json, awardfit.json, gamemodel.json, votes.json and mast_photo_<TEAM>.webp cutouts (all read by the build or the refits)
 .github/workflows/    the daily GitHub Actions job
 requirements.txt      pandas, numpy, pyarrow
 ```

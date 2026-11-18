@@ -944,9 +944,20 @@ def build_archive(raw, first_year, out_dir, url_of):
         print(f'archive {y}: box scores for {bg} of {scheduled} games, lineups {lc[0]}/{lc[1]}, {os.path.getsize(path)/1e6:.2f} MB', file=sys.stderr)
     return manifest
 
+def mast_photos():
+    """{team: data URI} for every static/mast_photo_<TEAM>.webp|png|jpg: the masthead shows the favorite team's photo in place of the court drawing"""
+    import base64, glob
+    out = {}
+    for f in sorted(glob.glob(os.path.join(HERE, 'static', 'mast_photo_*.*'))):
+        m = re.match(r'mast_photo_([A-Z]{2,4})\.(webp|png|jpe?g)$', os.path.basename(f))
+        if not m: continue
+        mime = {'webp': 'image/webp', 'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg'}[m.group(2).lower()]
+        out[m.group(1)] = 'data:' + mime + ';base64,' + base64.b64encode(open(f, 'rb').read()).decode()
+    return out
+
 def assemble(template_path, shot, leaders, awards, out_path):
     t = open(template_path, encoding='utf-8').read()
-    for ph, obj in (('/*DATA*/', shot), ('/*LEADERS*/', leaders), ('/*AWARDS*/', awards)):
+    for ph, obj in (('/*DATA*/', shot), ('/*LEADERS*/', leaders), ('/*AWARDS*/', awards), ('/*MASTPHOTOS*/', mast_photos())):
         assert ph in t, ph
         t = t.replace(ph, json.dumps(obj, separators=(',', ':')))
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
