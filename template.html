@@ -54,8 +54,13 @@ h1{font:800 clamp(30px,4vw,44px)/.95 var(--head);margin:0 0 6px;letter-spacing:.
 /* the masthead: the arena at night, with the half court the charts use drawn behind the name */
 .mast{background:var(--mast);color:var(--mast-ink);border-bottom:1px solid var(--mast-rule);position:relative;overflow:hidden}
 .mast-in{max-width:1180px;margin:0 auto;padding:22px 18px 0;position:relative}
-.mast-court{position:absolute;right:-20px;top:-26px;width:min(52vw,560px);height:auto;color:var(--mast-ink);opacity:.14;pointer-events:none}
-.mast-court *{fill:none;stroke:currentColor;stroke-width:.14}
+/* the court in the shot charts' own framing (baseline to just past the three-point apex), sized to the band and anchored to its bottom edge */
+.mast-court{position:absolute;right:16px;bottom:0;height:calc(100% - 6px);width:auto;aspect-ratio:50/31;color:var(--mast-ink);opacity:.26;pointer-events:none}
+.mast-court *{fill:none;stroke:currentColor;stroke-width:.28;stroke-linejoin:round}
+.mast-photo{position:absolute;right:28px;bottom:0;height:calc(100% - 8px);width:auto;pointer-events:none}
+.mast.has-photo .mast-court{display:none}
+.mast.has-photo .brand,.mast.has-photo .tabs{padding-right:230px}   /* room for the photo, so the tabs never sit under a face */
+@media (max-width:860px){.mast.has-photo .brand,.mast.has-photo .tabs{padding-right:0}.mast-photo{display:none}}
 .brand{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px;position:relative}
 .brand h1{font:800 clamp(36px,5vw,56px)/.9 var(--head);margin:0;color:var(--mast-ink);letter-spacing:.01em}
 .brand p{margin:0;color:var(--mast-muted);font-size:15px}
@@ -66,7 +71,7 @@ h1{font:800 clamp(30px,4vw,44px)/.95 var(--head);margin:0 0 6px;letter-spacing:.
 .tabs button[aria-selected="true"]{color:var(--mast-ink);border-bottom-color:var(--gold)}
 .tabs button:focus-visible{outline:2px solid var(--gold);outline-offset:-2px;border-radius:2px}
 @media (prefers-reduced-motion:reduce){.tabs button{transition:none}}
-@media (max-width:720px){.mast-in{padding-top:16px}.brand h1{font-size:clamp(34px,10vw,44px)}.mast-court{width:72vw;right:-60px;top:-10px;opacity:.10}}
+@media (max-width:720px){.mast-in{padding-top:16px}.brand h1{font-size:clamp(34px,10vw,44px)}.mast-court{opacity:.16;right:8px}}
 
 .controls{display:flex;flex-wrap:wrap;gap:14px 18px;align-items:flex-end;
   background:var(--surface);border:1px solid var(--rule);border-radius:4px;padding:14px 16px;margin-bottom:16px}
@@ -592,7 +597,8 @@ th[aria-sort=ascending]::after{content:" \25B2";font-size:.75em;color:var(--mute
 <body>
 <header class="mast">
   <div class="mast-in">
-    <svg class="mast-court" viewBox="0 0 50 47" aria-hidden="true" focusable="false"><rect x="0" y="0" width="50" height="47"/><rect x="17" y="28.00" width="16" height="19"/><circle cx="25" cy="28.00" r="6"/><path d="M3.00,47.00 L3.00,32.80 A23.75,23.75 0 1 1 47.00,32.80 L47.00,47.00"/><path d="M21.00,41.75 A4,4 0 0 1 29.00,41.75"/><line x1="22" y1="43.00" x2="28" y2="43.00"/><circle cx="25" cy="41.75" r=".75"/><path d="M19,0 A6,6 0 0 0 31,0"/></svg>
+    <svg class="mast-court" viewBox="0 16 50 31" width="500" height="310" preserveAspectRatio="xMidYMax meet" aria-hidden="true" focusable="false"><rect x="0" y="0" width="50" height="47"/><rect x="17" y="28.00" width="16" height="19"/><circle cx="25" cy="28.00" r="6"/><path d="M3.00,47.00 L3.00,32.80 A23.75,23.75 0 0 1 47.00,32.80 L47.00,47.00"/><path d="M21.00,41.75 A4,4 0 0 1 29.00,41.75"/><line x1="22" y1="43.00" x2="28" y2="43.00"/><circle cx="25" cy="41.75" r=".75"/></svg>
+    <img class="mast-photo" id="mast-photo" alt="" hidden>
     <div class="brand"><h1>NBA Dashboard</h1><p id="mast-sub"></p></div>
   <div class="tabs" role="tablist" aria-label="Pages">
     <button type="button" role="tab" id="tab-teams" aria-controls="view-teams" aria-selected="true" data-view="teams" aria-label="League Scoreboard"><span class="tl">League Scoreboard</span><span class="ts">Scores</span></button>
@@ -870,6 +876,10 @@ window.NBA_THEME = (function(){
   return {init:init, apply:apply, palette:palette, tokens:tokens};
 })();
 NBA_THEME.init(window.NBA_FAV, D.tcolors);
+/* a photo in place of the court for teams that have one in static/ (mast_photo_<TEAM>.webp), inlined by the build */
+var MAST_PHOTOS = /*MASTPHOTOS*/;
+(function(){ var src = MAST_PHOTOS && MAST_PHOTOS[window.NBA_FAV], img = document.getElementById('mast-photo'), mast = document.querySelector('.mast');
+  if (src && img){ img.src = src; img.hidden = false; if (mast) mast.classList.add('has-photo'); } })();
 /* ---------- the archive: older seasons kept in separate files and fetched when first picked ---------- */
 var ARCH = window.NBA_ARCHIVE = (function(){
   var man = D.archive || {}, loaded = {}, data = {}, promises = {}, hooks = [];
@@ -4117,7 +4127,7 @@ window.NBA_MATCHUP = {matchup:matchup, N0:N0};
 /* ---------- the hub ---------- */
 var FAV = window.NBA_FAV || 'MEM';
 /* the colloquial name of each team's home arena; the tab and the heading take the favorite team's */
-var ARENA = {ATL:'The Highlight Factory',BKN:'Barclays',BOS:'The Garden',CHA:'The Hive',CHI:'The Madhouse on Madison',CLE:'The Q',DAL:'The AAC',DEN:'The Can',DET:'The LCA',GS:'Loserville',
+var ARENA = {ATL:'The Highlight Factory',BKN:'Barclays',BOS:'The Garden',CHA:'The Hive',CHI:'The Madhouse on Madison',CLE:'The Q',DAL:'The AAC',DEN:'The Can',DET:'The LCA',GS:'The Donkey\u2019s Den',
   HOU:'The Toyota Center',IND:'The Fieldhouse',LAC:'The Dome',LAL:'Idiot Town',MEM:'The Grindhouse',MIA:'The Triple-A',MIL:'The Fiserv',MIN:'Target Center',NO:'The Blender',NY:'The Garden',
   OKC:'The Peake',ORL:'The Kia Center',PHI:'The Center',PHX:'The Purple Palace',POR:'The Rose Garden',SA:'The Frost',SAC:'The G1C',TOR:'The Hangar',UTAH:'The Delta Center',WSH:'The Phone Booth'};
 var FULLN = {ATL:'Atlanta Hawks',BKN:'Brooklyn Nets',BOS:'Boston Celtics',CHA:'Charlotte Hornets',CHI:'Chicago Bulls',CLE:'Cleveland Cavaliers',DAL:'Dallas Mavericks',DEN:'Denver Nuggets',DET:'Detroit Pistons',GS:'Golden State Warriors',HOU:'Houston Rockets',IND:'Indiana Pacers',LAC:'LA Clippers',LAL:'Los Angeles Lakers',MEM:'Memphis Grizzlies',MIA:'Miami Heat',MIL:'Milwaukee Bucks',MIN:'Minnesota Timberwolves',NO:'New Orleans Pelicans',NY:'New York Knicks',OKC:'Oklahoma City Thunder',ORL:'Orlando Magic',PHI:'Philadelphia 76ers',PHX:'Phoenix Suns',POR:'Portland Trail Blazers',SA:'San Antonio Spurs',SAC:'Sacramento Kings',TOR:'Toronto Raptors',UTAH:'Utah Jazz',WSH:'Washington Wizards'};
