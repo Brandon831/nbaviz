@@ -968,7 +968,7 @@ def best_seasons(M, min_team_games=20):
     for k in keys:
         for p in M.SEAS[k]['players']:
             pid = p['pid']
-            if pid in best and len(best[pid]) == 2 or p['gp'] < 20 or pid == 99999999: continue
+            if pid in best and len(best[pid]) == 2 or p['gp'] < 20: continue   # Armando, the league-average player, is included here: his arc is the league's trend
             sc = round(float(M.gs(p) / p['gp'] + M.BETA_MVP * (100 * M.team_T(k, p['team'], False) - 50)), 2)
             if pid not in best or sc > best[pid][1]: best[pid] = [k, sc, 1]
     return {str(pid): v for pid, v in best.items()}
@@ -981,7 +981,7 @@ def career_arcs(M, min_team_games=20):
     for k in M.KEYS:
         if M.SEAS[k]['maxg'] < min_team_games: continue
         for p in M.SEAS[k]['players']:
-            if p['gp'] < 20 or p['pid'] == 99999999: continue
+            if p['gp'] < 20: continue
             arc.setdefault(str(p['pid']), []).append([int(k), round(float(M.gs(p) / p['gp'] + M.BETA_MVP * (100 * M.team_T(k, p['team'], False) - 50)), 1)])
     return arc
 
@@ -1024,6 +1024,7 @@ def main():
         leaders['mipfit'] = M.mip_fit(); leaders['backtest'] = M.backtest(leaders['mipfit'])
         print(f"Most Improved regression on {leaders['mipfit']['seasons']} seasons: {leaders['mipfit']['a']:+.3f} {leaders['mipfit']['b']:+.4f} x last-year Game Score; scorecard rows: {len(leaders['backtest'])}", file=sys.stderr)
     shot['best'] = best_seasons(M); shot['arc'] = career_arcs(M); shot['bestBeta'] = M.BETA_MVP   # the team-record weight the best-season scores use, for the tooltip
+    shot['tcolors'] = leaders.get('tcolors') or {}   # also in the shot block, so the page can theme itself from the favorite team before the charts read the palette
     print(f"best seasons by the MVP formula: {len(shot['best'])} players; career arcs: {sum(len(v) for v in shot['arc'].values())} player-seasons", file=sys.stderr)
     leaders['warnings'] = []
     if getattr(a, 'no_injuries', False): leaders['injuries'] = {}; leaders['injuryNote'] = 'injury report skipped (--no-injuries)'

@@ -43,7 +43,8 @@ seasons are computed once and cached in `raw/season<year>.json`, so later runs o
 **Armando "NBA" Venegas** is a synthetic player in every season, archived ones included: the average of every player with data that season (box-score
 totals averaged across players, and a systematic sample of the league's shots sized to the average player's attempts). He can be
 searched, charted and compared like anyone, and is rebuilt with every update, but he is left out of league baselines, leaderboards,
-award ladders and team figures. Any column heading in a table can be clicked to sort by it.
+award ladders and team figures. He does get a best season and a career arc: his arc is the league's trend (the average player's
+Game Score per game rose from about 7.1 in 2002-03 to 8.7 by 2022-23). Any column heading in a table can be clicked to sort by it.
 
 Most charts and tables have **Save chart as image** and **Download table (CSV)** buttons. On your own site (not
 on the Claude-hosted page) there are also **Copy link** buttons that save the current view in the address.
@@ -250,6 +251,7 @@ Grindhouse next-game panel itemizes the margin. If the feed cannot be read the p
 - Each completed game on the League Scoreboard names one top player, the best performer by Game Score, with the stat line (points,
   rebounds, assists, steals and blocks when notable, shooting); hovering shows the Game Score, minutes and the complete line. The
   Grizzlies roster table was removed from the League Leaders page (the roster file still feeds the Grindhouse).
+- The standings on the League Scoreboard show Home and Away records, computed in the page from the completed games (the Cup final excluded).
 - The season tracker on the Awards tab can plot each race as the model's predicted share of the vote day by day (a checkbox under
   the chart) instead of rank; the snapshots carry the share as a third value where the award has a fitted temperature.
 - Most Improved was checked against its voting too: 11.4% of its real points fall outside the model's pool, spread across five
@@ -266,6 +268,25 @@ get the best of their seasons with at least 20 games, flagged so the tooltip say
 20 games. "Show <name>'s Best Season" under the Season menu jumps to that season (loading it if archived) and follows the player while
 checked; the same checkbox under the second-player picker draws the comparison chart from that player's best season while the first
 chart keeps the selected season. `check_build.py` fails if the map is missing or points at a season the page does not have.
+
+## The look (November 2026 redesign)
+
+One idea carries the page: an arena at night. A full-width midnight-navy masthead holds the name in Big Shoulders Display with the half
+court the charts use drawn faintly behind it (the SVG in `template.html` is generated from the same geometry: hoop at 5.25 ft, arc
+23.75 ft, corners at 22 ft), and the tabs sit in that band with the active one underlined in Grizzlies gold. Below it the surfaces are a
+cool arena light (not cream), panels are flat with a tight 4 px radius, tables use hairlines and tabular figures, and gold appears only
+where it means something: the active tab, the favorite team's rows, and first place. Dark mode is deep navy with a brighter gold.
+Type: Big Shoulders Display for headlines and every large number, Source Sans 3 for everything read.
+
+**The colors follow the favorite team.** `NBA_THEME` in `template.html` derives the palette at load from the team's ESPN colors (the
+build puts them in the shot block as `tcolors`): the darker color becomes the base (masthead, ink, tinted neutrals), the other the
+accent (active tab, favorite rows, first place). Black is never a base when the other color has a hue; white, black, grey or a color
+too close to the base is replaced by a tint of the base; a few teams use their official third color (Grizzlies gold, Celtics gold,
+Heat yellow, Magic silver) or a chosen neutral; the accent is lifted until it reads at 3:1 against the masthead, and all 30 teams pass
+in both modes. The shot-chart pair (cold blue, hot ember) and the league-award gold stay fixed so the charts and the awards mean the
+same thing whatever the team. Memphis comes out as the navy-and-gold design described above. Removed: gradients, shine, drop
+shadows, hover lifts, uppercase tracked labels, pill radii. The shot-chart palette (cold blue, hot ember, teal for shot share) is read
+from the same CSS tokens, so the canvases follow the theme.
 
 ## Known data quirks (from the November 2026 review)
 
