@@ -307,6 +307,14 @@ from the same CSS tokens, so the canvases follow the theme.
   ARCHIVE_VERSION 9 for this, so a fresh build rebuilds them.
 - The two unscheduled games per team in November are the NBA Cup placeholders; the projections count them at the team's average chance.
 
+## Keep template.html and nba_build.py from the same package
+
+The build fills markers in the template (`/*DATA*/`, `/*LEADERS*/`, `/*AWARDS*/`, `/*MASTPHOTOS*/`). A template newer than the build
+leaves a marker behind, and if that marker sits inside a JavaScript statement the whole script fails to parse: the static text still
+shows but every data-driven tab is blank. The markers are now written so a leftover one is a harmless comment, `nba_build.py` tolerates
+a template without the photo marker, and `check_build.py` fails on any leftover marker and runs `node --check` on every script block
+(the GitHub runner has node). Still: when you take files from a package, take `nba_build.py`, `template.html` and `check_build.py` together.
+
 ## Good to know
 
 - Shot locations are ESPN's, so zone totals will not match NBA.com exactly. Free throws, heaves beyond 40
