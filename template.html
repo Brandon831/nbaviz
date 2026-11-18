@@ -877,7 +877,8 @@ window.NBA_THEME = (function(){
 })();
 NBA_THEME.init(window.NBA_FAV, D.tcolors);
 /* a photo in place of the court for teams that have one in static/ (mast_photo_<TEAM>.webp), inlined by the build */
-var MAST_PHOTOS = /*MASTPHOTOS*/;
+var MAST_PHOTOS = {};
+/*MASTPHOTOS*/
 (function(){ var src = MAST_PHOTOS && MAST_PHOTOS[window.NBA_FAV], img = document.getElementById('mast-photo'), mast = document.querySelector('.mast');
   if (src && img){ img.src = src; img.hidden = false; if (mast) mast.classList.add('has-photo'); } })();
 /* ---------- the archive: older seasons kept in separate files and fetched when first picked ---------- */

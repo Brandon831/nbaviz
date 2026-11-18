@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Sanity-checks a built dashboard before it is published. Exits non-zero if something looks wrong."""
-import base64, json, re, sys
+import base64, json, re, sys, os
 path = sys.argv[1] if len(sys.argv) > 1 else 'docs/index.html'
 html = open(path, encoding='utf-8').read()
 def block(i):
@@ -47,6 +47,18 @@ if len(gb) != leaders['games']: problems.append(f'box scores for {len(gb)} games
 elif any((not g[2]) or (not g[3]) or g[1] is None for g in gb): problems.append('some games have no box score or score-flow data')
 if not isinstance(leaders.get('remaining'), list): problems.append('the remaining schedule is missing')
 if not leaders.get('builtAt'): problems.append('the build time is missing')
+for marker in ('/*DATA*/', '/*LEADERS*/', '/*AWARDS*/', '/*MASTPHOTOS*/'):
+    if marker in html: problems.append(f'the build left {marker} in the page: template.html is newer than nba_build.py (update nba_build.py from the same package)')
+# every inline script must at least parse: a syntax error leaves the whole page blank while the static text still shows
+import shutil, subprocess, tempfile
+if shutil.which('node'):
+    for i, block in enumerate(re.findall(r'<script(?![^>]*type="application/json")[^>]*>(.*?)</script>', html, re.S)):
+        if not block.strip(): continue
+        with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False, encoding='utf-8') as f: f.write(block); path_js = f.name
+        r = subprocess.run(['node', '--check', path_js], capture_output=True, text=True); os.unlink(path_js)
+        if r.returncode:
+            why = [l for l in r.stderr.splitlines() if 'Error' in l and 'Node.js' not in l]; problems.append(f'script block {i} does not parse: ' + (why[0] if why else r.stderr.strip().splitlines()[0])[:160])
+else: print('note: node not found, so the scripts were not syntax-checked')
 best = shot.get('best') or {}
 if len(best) < 300: problems.append(f'the best-season map has only {len(best)} players (the Show Best Season checkboxes need it)')
 else:

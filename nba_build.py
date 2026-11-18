@@ -958,7 +958,10 @@ def mast_photos():
 def assemble(template_path, shot, leaders, awards, out_path):
     t = open(template_path, encoding='utf-8').read()
     for ph, obj in (('/*DATA*/', shot), ('/*LEADERS*/', leaders), ('/*AWARDS*/', awards), ('/*MASTPHOTOS*/', mast_photos())):
-        assert ph in t, ph
+        if ph == '/*MASTPHOTOS*/':
+            if ph in t: t = t.replace(ph, 'MAST_PHOTOS = ' + json.dumps(obj) + ';')   # an older template without the marker still builds
+            continue
+        assert ph in t, f'{ph} is missing from template.html: the template and nba_build.py are out of step'
         t = t.replace(ph, json.dumps(obj, separators=(',', ':')))
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     open(out_path, 'w', encoding='utf-8').write(t)
