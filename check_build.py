@@ -19,9 +19,21 @@ else:
     if cur['games'] != leaders['games']: problems.append(f"play-by-play has {cur['games']} games but box scores have {leaders['games']}")
     if cur['asof'] != leaders['asof']: problems.append('play-by-play and box scores end on different dates')
     if leaders['games'] < 1: problems.append('no games played this season yet')
+page_dir = os.path.dirname(os.path.abspath(path))
 for k, s in seasons.items():
-    n = len(base64.b64decode(s['d'])) // 2
-    if len(base64.b64decode(s['x'])) // 2 != n: problems.append(f'{k}: shot extras are not aligned with the shots')
+    if 'd' in s:
+        n = len(base64.b64decode(s['d'])) // 2
+        if len(base64.b64decode(s['x'])) // 2 != n: problems.append(f'{k}: shot extras are not aligned with the shots')
+    else:
+        sh = s.get('shots') or {}; n = sh.get('n', 0)
+        if not sh.get('url') or not n: problems.append(f'{k}: no shot arrays and no deferred shot file')
+        local = os.path.join(page_dir, sh.get('url', '')) if sh.get('url', '').startswith('data/') else None
+        if local and not os.path.exists(local): problems.append(f'{k}: deferred shot file {sh["url"]} is missing next to the page')
+        elif local:
+            try:
+                part = json.load(open(local)); m = len(base64.b64decode(part['d'])) // 2
+                if m != n or len(base64.b64decode(part['x'])) // 2 != m: problems.append(f'{k}: deferred shot file does not match the page ({m} vs {n} shots)')
+            except Exception as e: problems.append(f'{k}: deferred shot file unreadable ({e})')
     if sum(p[2] + p[3] for p in s['pl']) != n: problems.append(f'{k}: player shot counts do not add up')
     if k != leaders['key'] and n < 150000: problems.append(f'{k}: only {n} shots, which looks incomplete')
 for k in leaders['hist']:
@@ -68,6 +80,9 @@ else:
 if len(shot.get('arc') or {}) < 300: problems.append('the career-arc map is missing or nearly empty')
 if not (leaders.get('awardfit') or {}).get('mvp', {}).get('tau'): problems.append('awardfit (vote-share temperatures) is missing from the leaders block')
 if leaders.get('injuryLogNote'): print('note:', leaders['injuryLogNote'])
+# lineup coverage: from 2020-21 the play-by-play rebuilds at least 95% of games; a drop below that means the reconstruction regressed, not the data
+for k, m in (shot.get('archive') or {}).items():
+    if int(k) >= 2021 and m.get('lineups', 1) < 0.95: problems.append(f'archived {k}: lineups rebuilt for only {100*m["lineups"]:.0f}% of games (expected 95%+)')
 gm = leaders.get('gamemodel') or {}
 if not all(k in gm for k in ('K', 'PW', 'GAP', 'HCA', 'B2B', 'SIG')) or not gm.get('avail'): problems.append('gamemodel (the fitted win-chance constants) is missing or incomplete in the leaders block')
 if not isinstance(leaders.get('injuries'), dict): problems.append('the injury report block is missing (should be a dict, possibly empty)')

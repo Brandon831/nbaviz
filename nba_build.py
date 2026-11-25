@@ -459,9 +459,14 @@ def rapm(stints, lam=RAPM_LAMBDA):
         for p in af: poss[p] += qh + qa
     X = sparse.csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(r, 2 * P)); W = sparse.diags(np.array(w)); yv = np.array(y)
     mu = float(np.average(yv, weights=w)); yc = yv - mu
-    A = (X.T @ W @ X + lam * sparse.identity(2 * P)).tocsc(); b = X.T @ (W @ yc)
+    XtWX = (X.T @ W @ X).tocsc(); A = (XtWX + lam * sparse.identity(2 * P)).tocsc(); b = X.T @ (W @ yc)
     beta = spsolve(A, b)
-    return {str(p): [round(float(beta[i]), 3), round(float(beta[P + i]), 3), int(round(poss[p]))] for p, i in idx.items()}
+    # standard errors of the ridge estimates: Var(beta) = s2 * A^-1 X'WX A^-1, with s2 the weighted residual variance over the effective degrees of freedom
+    try:
+        Ai = np.linalg.inv(A.toarray()); H = Ai @ XtWX.toarray(); resid = yc - X @ beta; df = max(1.0, r - float(np.trace(H)))
+        s2 = float((np.array(w) * resid ** 2).sum() / df); se = np.sqrt(np.clip(s2 * np.einsum('ij,jk,ki->i', Ai, XtWX.toarray(), Ai), 0, None))
+    except Exception: se = np.full(2 * P, float('nan'))
+    return {str(p): [round(float(beta[i]), 3), round(float(beta[P + i]), 3), int(round(poss[p])), round(float(se[i]), 2), round(float(se[P + i]), 2)] for p, i in idx.items()}
 
 # ----------------------------------------------------------------------------- lineups and on/off ratings (rebuilt from substitutions)
 TOV_RE = re.compile(r'Turnover|Traveling|Kicked Ball|^Lane$|Double Lane')
@@ -523,7 +528,7 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
     size = os.path.getsize(fetch(raw, 'pbp', y))
     if use_cache and y != CURRENT and not keep_games and os.path.exists(cache):
         c = json.load(open(cache))
-        if c.get('pbp_size') == size and c.get('v') == 7: return c['data']
+        if c.get('pbp_size') == size and c.get('v') == 9: return c['data']
     cols = ['game_id','sequence_number','period_number','clock_minutes','clock_seconds','type_text','athlete_id_1','athlete_id_2','team_id','home_team_id','away_team_id',
             'home_team_abbrev','away_team_abbrev','home_score','away_score','shooting_play','scoring_play','coordinate_x','coordinate_y','season_type']
     d = readp(fetch(raw, 'pbp', y), columns=cols)
@@ -532,7 +537,7 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
     if cup_id is not None: d = d[d.game_id != cup_id]
     # chronological order: period, then game clock counting down, then ESPN's sequence number to break ties (sequence numbers alone sometimes interleave periods)
     d = d.assign(seq=d.sequence_number.astype(float), neg=-(d.clock_minutes * 60 + d.clock_seconds)).sort_values(['game_id', 'period_number', 'neg', 'seq'])
-    act = box_d[(box_d.did_not_play == False) & (box_d.minutes > 0)]
+    act = box_d[(box_d.did_not_play == False) & box_d.minutes.notna()]   # 0:00 players stay: they can appear in substitution events, and the rebuilt minutes are checked against theirs too
     starters = {(int(g), int(t)): [int(x) for x in grp.athlete_id] for (g, t), grp in act[act.starter == True].groupby(['game_id', 'team_id'])}
     boxmin = {(int(g), int(p)): float(m) for g, p, m in zip(act.game_id, act.athlete_id, act.minutes)}
     roster = {(int(g), int(t)): set(int(x) for x in grp.athlete_id) for (g, t), grp in act.groupby(['game_id', 'team_id'])}
@@ -682,7 +687,7 @@ def lineup_data(raw, y, cup_id, box_d, keep_games=False, tol=1.5, use_cache=True
            'lineups': top(lineups, 15), 'pairs': top(pairs, 15)}
     if keep_games: res['pm'] = {str(g): v for g, v in pm_all.items()}; res['flows'] = {str(g): v for g, v in flows.items()}
     if use_cache and y != CURRENT and not keep_games:
-        json.dump({'v': 7, 'pbp_size': size, 'data': res}, open(cache, 'w'), separators=(',', ':'))
+        json.dump({'v': 9, 'pbp_size': size, 'data': res}, open(cache, 'w'), separators=(',', ':'))
     return res
 
 def flows_data(raw, y, cup_id):
@@ -912,7 +917,7 @@ def build_blocks(raw, refresh_current=True):
     return shot, leaders
 
 # ----------------------------------------------------------------------------- archived seasons (one file each, loaded by the page on demand)
-ARCHIVE_VERSION = 9
+ARCHIVE_VERSION = 11
 def season_payload(raw, y):
     """Everything the page needs for one finished season, as one JSON-ready object. Cached in raw/ because finished seasons never change."""
     cache = os.path.join(raw, f'season{y}.json')
@@ -966,6 +971,40 @@ def assemble(template_path, shot, leaders, awards, out_path):
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     open(out_path, 'w', encoding='utf-8').write(t)
     return len(t)
+
+def vote_history(votes):
+    """{player id: [[season, award, share of points possible, rank among vote-getters], ...]} from static/votes.json, for the player cards"""
+    out = {}
+    for k, tabs in sorted(votes.items()):
+        for award, tbl in tabs.items():
+            rows = sorted(tbl['rows'], key=lambda r: -r[1]); mx = tbl['max'] or 1
+            for rank, (pid, pts) in enumerate(rows, 1): out.setdefault(str(pid), []).append([int(k), award, round(pts / mx, 3), rank])
+    return out
+
+def shot_diet(payloads, shot, min_shots=100):
+    """{player id: [[season, rim, paint, mid, three, corner], ...]}: where a player's regular-season shots came from, in whole percentages,
+    for every season with at least min_shots shots. Zones follow zone_shot (the page's LUT): rim = restricted area, paint = the rest of the
+    key, mid = the five mid-range zones, three = the five above-the-break zones, corner = the two corners."""
+    import base64
+    lut = np.zeros((2, 101, 95), dtype=np.int8)
+    for t in range(2):
+        for cx in range(101):
+            for cy in range(95): lut[t, cx, cy] = zone_shot(cx / 2 - 25, cy / 2, bool(t))
+    group = np.array([0, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4])
+    out = {}
+    def eat(key, sblock):
+        arr = np.frombuffer(base64.b64decode(sblock['d']), dtype='<u2'); off = 0
+        for p in sblock['pl']:
+            pid, nr, npo = p[0], p[2], p[3]
+            if nr >= min_shots:
+                seg = arr[off:off + nr]; cy = seg % 95; q = (seg - cy) // 95; cx = q % 101; m = (q - cx) // 101
+                z = group[lut[(m & 1).astype(int), cx, cy]]; cnt = np.bincount(z, minlength=5)
+                out.setdefault(str(pid), []).append([int(key)] + [int(round(100 * c / nr)) for c in cnt])
+            off += nr + npo
+    for y, p in payloads.items(): eat(y, p['shot'])
+    for k, sblock in shot['seasons'].items(): eat(k, sblock)
+    for v in out.values(): v.sort()
+    return out
 
 def best_seasons(M, min_team_games=20):
     """{player id: [season, score]}: the season in which the MVP formula rated the player highest. Each season is scored on its own (Game Score
@@ -1038,6 +1077,17 @@ def main():
         leaders['mipfit'] = M.mip_fit(); leaders['backtest'] = M.backtest(leaders['mipfit'])
         print(f"Most Improved regression on {leaders['mipfit']['seasons']} seasons: {leaders['mipfit']['a']:+.3f} {leaders['mipfit']['b']:+.4f} x last-year Game Score; scorecard rows: {len(leaders['backtest'])}", file=sys.stderr)
     shot['best'] = best_seasons(M); shot['arc'] = career_arcs(M); shot['bestBeta'] = M.BETA_MVP   # the team-record weight the best-season scores use, for the tooltip
+    vf = os.path.join(HERE, 'static', 'votes.json'); leaders['votehist'] = vote_history(json.load(open(vf))) if os.path.exists(vf) else {}   # award vote history per player, for the cards
+    shot['diet'] = shot_diet(payloads, shot); print(f"shot diet: {sum(len(v) for v in shot['diet'].values())} player-seasons", file=sys.stderr)
+    # the shot arrays of the embedded seasons before this one leave the page: they load when picked, like the archive, which cuts the first load by about two thirds
+    out_dir2 = a.archive_dir or os.path.join(os.path.dirname(os.path.abspath(a.out)), 'data'); os.makedirs(out_dir2, exist_ok=True)
+    urls2 = json.load(open(a.archive_urls)) if a.archive_urls else {}
+    for k in sorted(shot['seasons']):
+        if k == str(CURRENT): continue
+        sb = shot['seasons'][k]; part = {c: sb.pop(c) for c in ('d', 'x', 'gx') if c in sb}
+        path = os.path.join(out_dir2, f'shots-{k}.json'); json.dump(part, open(path, 'w'), separators=(',', ':'))
+        sb['shots'] = {'url': urls2.get(f'shots-{k}', f'data/shots-{k}.json'), 'bytes': os.path.getsize(path), 'n': len(base64.b64decode(part['d'])) // 2}
+        print(f'shots {k}: {sb["shots"]["n"]:,} shots to {os.path.basename(path)} ({sb["shots"]["bytes"]/1e6:.2f} MB)', file=sys.stderr)
     shot['tcolors'] = leaders.get('tcolors') or {}   # also in the shot block, so the page can theme itself from the favorite team before the charts read the palette
     print(f"best seasons by the MVP formula: {len(shot['best'])} players; career arcs: {sum(len(v) for v in shot['arc'].values())} player-seasons", file=sys.stderr)
     leaders['warnings'] = []

@@ -237,6 +237,37 @@ which the page reads on the next build. The Projections tab lists the report wit
 Grindhouse next-game panel itemizes the margin. If the feed cannot be read the page says so on the About tab and assumes full rosters;
 `check_build.py` reports that as a note rather than a failure, so a feed outage does not block the daily publish.
 
+## The November 2026 batch: a front page, depth for analysts, and a lighter first load
+
+- **Today** is the landing tab: last night's results with the top-player lines, the next slate with win chances and who is out, a
+  standings snapshot (games behind, last five), the five award races as vote shares, and the favorite team's record, odds (4,000
+  simulations) and next game. Everything on it is composed from data the other tabs already carry.
+- **Shaded tables.** The Players, Team Stats and standings tables tint each numeric column by percentile (warm is better, lower-is-better
+  columns inverted). The tint is a CSS class with a custom property, so it works in every browser and in the test harness.
+- **Thin zones fade** on the shot charts below ten attempts, so a 2-for-3 corner no longer looks as confident as a 90-for-200 one.
+- **Projections headline**: the favorite team's top-six, play-in, out and first-seed odds, the projected-wins band, and the rating
+  change against seven days ago.
+- **Era-adjusted career arc**: a checkbox draws the arc relative to the average player that season (Armando's arc is the baseline).
+- **Uncertainty**: RAPM carries standard errors from the ridge solve (elements 4 and 5 of each entry), shown as ± in the Players
+  table and on the cards; the lineup cache is v9 for this.
+- **Player cards** (the "card" button on the Players tab): season line, impact with errors, honors, the full vote history from
+  `votes.json` (embedded as `leaders.votehist`), the career arc and a shot-diet chart by season (`shot.diet`, computed by the build for
+  every player-season with 100+ shots as rim, paint, mid-range, above-the-break three and corner three shares).
+- **All teams** in the Team Stats selectors: the defense chart shows every shot in the league (neutral against itself; use points per
+  shot or shot share), and the lineups and duos tables pool every team's most-used units with a team column (the matrix needs one team).
+- **Who works with whom**: a third lineup mode, a matrix of pair net ratings for the nine players with the most pair minutes, the
+  diagonal being each player's own on-court net.
+- **Shareable views**: the shot chart writes its state to the address (`#shots~p=&s=&m=&c=`) and has a copy-link button.
+- **Masthead search** for any player or team; a **Data** section on About lists every season file with its fields; a **glossary**
+  (`NBA_UI.GLOSS`) supplies tooltips on table headers.
+- **Lighter first load.** The shot arrays of the four embedded seasons before the current one now live in `data/shots-<year>.json`
+  (about 1.25 MB each) and load when a season is picked, like the archive; the page itself fell from 8.6 MB to 3.6 MB. Standings,
+  leaders and player tables for those seasons stay embedded, so every other tab is unchanged. The archive loader (`NBA_ARCHIVE`)
+  handles both kinds, menus that need several seasons load them all, tallies skip seasons whose arrays have not arrived and redraw
+  when they do, and last season's file is prefetched when the browser is idle. `check_build.py` verifies each deferred file against
+  the page. For the artifact these four files are assets too (`archive_urls.json` maps `shots-<year>`); GitHub Pages serves them
+  from `docs/data/` automatically.
+
 ## Shot Charts: shot quality, difference map, career arc
 
 - **FG% vs. expected** (a fourth zone coloring): expected FG% is the league's conversion rate on the same kind of shot (zone, shot
@@ -299,7 +330,9 @@ from the same CSS tokens, so the canvases follow the theme.
   Ferrell 2016-17, both real selections), so `votes.json` is short those rows and the All-Rookie totals for 2010-11, 2014-15 and
   2016-17 fall below the ballot arithmetic. Nothing on the page uses All-Rookie votes; `awards.json` is correct.
 - ESPN lists a handful of fringe players as active with 0:00 minutes. A game now counts as played only with minutes on the floor
-  (every games-played count in the build uses that rule).
+  (every games-played count in the build uses that rule), except inside the lineup reconstruction, which must keep 0:00 players because
+  they appear in substitution events; dropping them there cost about 6% of lineup games in a November build (fixed, lineup cache v8,
+  and `check_build.py` now fails if a season from 2020-21 on rebuilds under 95% of its games).
 - Standings are built from the box scores, which always carry the final score; the play-by-play stops short of the final in many
   early-season games (316 of them in 2002-03, 28 with the wrong winner) and lacks a few games altogether (Chicago at the Clippers,
   2025-26). The play-by-play now only fills in a game the box scores do not have. Spot checks against the record books pass (Spurs
