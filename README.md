@@ -255,6 +255,10 @@ Grindhouse next-game panel itemizes the margin. If the feed cannot be read the p
   every player-season with 100+ shots as rim, paint, mid-range, above-the-break three and corner three shares).
 - **All teams** in the Team Stats selectors: the defense chart shows every shot in the league (neutral against itself; use points per
   shot or shot share), and the lineups and duos tables pool every team's most-used units with a team column (the matrix needs one team).
+- **Several highlights at once** on the Players and Team Stats tabs: clicking a dot or a row adds or removes it, each highlighted
+  item gets a summary line with a remove button, "Clear all" appears with two or more, and the last one picked is the lead that drives
+  the linked defense chart and lineups (teams) or the chart link (players). Share links carry the whole list. A "Fade the rest"
+  checkbox beside each highlight control dims every unhighlighted dot and row (hover restores one) and drops the outlier labels.
 - **Who works with whom**: a third lineup mode, a matrix of pair net ratings for the nine players with the most pair minutes, the
   diagonal being each player's own on-court net.
 - **Shareable views**: the shot chart writes its state to the address (`#shots~p=&s=&m=&c=`) and has a copy-link button.
