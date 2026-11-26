@@ -4807,7 +4807,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
     var lastGames = done.filter(function(r){ return r[0] === lastDay; }), nextGames = rows.filter(function(r){ return r[4] === 0 && r[0] === nextDay; });
     var built = (L.builtAt || '').slice(0, 10);
     el('view-today').innerHTML =
-      '<div class="tyhero"><h1>Today</h1><p class="lede">'+esc(dayLabel(built || L.asof))+'. Data through '+esc(dayLabel(L.asof))+', '+L.games+' games.</p></div>'+
+      '<div class="tyhero"><h1>Today</h1><p class="lede">'+esc(dayLabel(built || L.asof))+'. Data through '+esc(dayLabel(L.asof))+': '+L.games+' games.</p></div>'+
       '<section class="tyblock"><div class="tyhd"><h2>'+(lastDay ? esc(dayLabel(lastDay)) : 'Latest results')+'</h2><a href="#scores">All scores</a></div><div class="scstrip">'+lastGames.map(scoreCard).join('')+'</div></section>'+
       '<section class="tyblock"><div class="tyhd"><h2>'+(nextDay ? 'Next: '+esc(dayLabel(nextDay)) : 'Next games')+'</h2><a href="#projections">Projections</a></div>'+(nextGames.length ? '<div class="scstrip">'+nextGames.map(scoreCard).join('')+'</div>' : '<p class="smn">No games scheduled.</p>')+'<p class="smn tynote">Bars are each side\u2019s win chance from the ratings, rest and the injury report in this build.</p></section>'+
       '<div class="tytwo">'+
